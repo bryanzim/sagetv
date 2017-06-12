@@ -29,7 +29,9 @@ config*.log
 /native/**/*.sbr
 /native/**/*.so
 /native/**/*.sqlite
+/native/**/*.suo
 /native/**/*.tlog
+/native/**/*.URL
 /native/**/*.VC.db
 /native/**/*.VC.opendb
 /native/**/*.VC.db-shm
