@@ -35,9 +35,11 @@
 
 #include <windows.h>
 #include <objbase.h>
-#include <D3dX9.h>
+//#include <D3dX9.h>
+#include <D3d10.h>
 
 // TODO: reference additional headers your program requires here
+#include "../../include/d3d9types.h"
 #include <jni.h>
 #include "../../include/jni-util.h"
 

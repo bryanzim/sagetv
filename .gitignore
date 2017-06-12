@@ -10,15 +10,44 @@ config*.log
 /sagetv
 /sagetv_*.txt
 
-/native/**/*.o
-/native/**/*.map
 /native/**/*.a
+/native/**/*.ax
+/native/**/*.bsc
+/native/**/*.dll
+/native/**/*.exp
+/native/**/*.idb
+/native/**/*.ilk
+/native/**/*.ipch
+/native/**/*.lib
+/native/**/*.log
+/native/**/*.map
+/native/**/*.o
+/native/**/*.obj
+/native/**/*.pch
+/native/**/*.pdb
+/native/**/*.res
+/native/**/*.sbr
 /native/**/*.so
+/native/**/*.sqlite
+/native/**/*.tlog
+/native/**/*.VC.db
+/native/**/*.VC.opendb
+/native/**/*.VC.db-shm
+/native/**/*.VC.db-wal
 
-/third_party/**/*.o
+/third_party/**/*.exp
+/third_party/**/*.idb
+/third_party/**/*.lib
 /third_party/**/*.lo
+/third_party/**/*.log
 /third_party/**/*.la
+/third_party/**/*.o
+/third_party/**/*.obj
 /third_party/**/*.pc
+/third_party/**/*.pdb
+/third_party/**/*.res
+/third_party/**/*.sbr
+/third_party/**/*.tlog
 
 # gradle/eclipse stuff
 /bin/
