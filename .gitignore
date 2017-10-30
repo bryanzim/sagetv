@@ -14,6 +14,7 @@ config*.log
 /native/**/*.ax
 /native/**/*.bsc
 /native/**/*.dll
+/native/**/*.exe
 /native/**/*.exp
 /native/**/*.idb
 /native/**/*.ilk
@@ -32,10 +33,12 @@ config*.log
 /native/**/*.suo
 /native/**/*.tlog
 /native/**/*.URL
+/native/**/*.vcxproj*
 /native/**/*.VC.db
 /native/**/*.VC.opendb
 /native/**/*.VC.db-shm
 /native/**/*.VC.db-wal
+/native/exe/MiniClientLauncher/**/RCa*
 
 /third_party/**/*.exp
 /third_party/**/*.idb
@@ -43,6 +46,7 @@ config*.log
 /third_party/**/*.lo
 /third_party/**/*.log
 /third_party/**/*.la
+/third_party/**/*.map
 /third_party/**/*.o
 /third_party/**/*.obj
 /third_party/**/*.pc
@@ -50,6 +54,7 @@ config*.log
 /third_party/**/*.res
 /third_party/**/*.sbr
 /third_party/**/*.tlog
+/third_party/**/*.vcxproj*
 
 # gradle/eclipse stuff
 /bin/

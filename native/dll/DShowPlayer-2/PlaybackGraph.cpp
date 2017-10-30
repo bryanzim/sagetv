@@ -15,7 +15,7 @@
  */
 
 #include "stdafx.h"
-#include <d3d9.h>
+#include "d3d9.h"
 #include "../../include/guids.h"
 #include "jni-util.h"
 #include <vmr9.h>

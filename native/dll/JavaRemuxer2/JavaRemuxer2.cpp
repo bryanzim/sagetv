@@ -25,10 +25,10 @@
 #undef _LARGEFILE64_SOURCE
 #endif
 
-#include "NativeCore.h"
-#include "TSBuilder.h"
-#include "Demuxer.h"
-#include "Remuxer.h"
+#include "../../ax/Native2.0/NativeCore/NativeCore.h"
+#include "../../ax/Native2.0/NativeCore/TSBuilder.h"
+#include "../../ax/Native2.0/NativeCore/Demuxer.h"
+#include "../../ax/Native2.0/NativeCore/Remuxer.h"
 
 typedef struct {
 	REMUXER *pRemuxer;

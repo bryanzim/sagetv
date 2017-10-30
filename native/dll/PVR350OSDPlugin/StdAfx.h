@@ -36,7 +36,7 @@
 #include <objbase.h>
 #include <atlbase.h>
 #include <jni.h>
-#include <dshow.h>
+#include <DShow.h>
 #include "../../include//jni-util.h"
 
 // TODO: reference additional headers your program requires here

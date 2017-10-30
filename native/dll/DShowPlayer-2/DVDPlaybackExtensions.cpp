@@ -23,7 +23,7 @@
 #include "sage_VideoFrame.h"
 #include "sage_PlaybackException.h"
 #include <streams.h>
-#include <d3d9.h>
+#include "d3d9.h"
 #include "..\..\..\third_party\Microsoft\VMRAllocator\VMRAllocator.h"
 
 IPin* FindDecoderSubpictureOutputPin(IBaseFilter* pFilter)

@@ -19,7 +19,7 @@
 
 //#pragma warning (disable : 4312)
 //#pragma warning (disable : 4995)
-#include <dshow.h>
+#include <DShow.h>
 #include <initguid.h>
 #include <atlbase.h>
 #include <atlconv.h>

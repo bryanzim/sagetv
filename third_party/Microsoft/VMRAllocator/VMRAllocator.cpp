@@ -8,12 +8,11 @@
 //------------------------------------------------------------------------------
 
 #include "stdafx.h"
-#include <dshow.h>
+#include <DShow.h>
 #include <streams.h>
-#include <d3d9.h>
 #include "VMRAllocator.h"
 #include "jni.h"
-#include <d3dx9tex.h>
+#include "DirectX9/d3dx9tex.h"
 #include "jni-util.h"
 
 #define FAIL_RET(x) do { if( FAILED( hr = ( x  ) ) ) \

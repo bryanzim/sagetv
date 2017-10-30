@@ -15,13 +15,13 @@
  */
 #include "stdafx.h"
 #include "DShowPlayer.h"
-#include <d3d9.h>
+#include "d3d9.h"
 #include <streams.h>
 #include "../../../third_party/Microsoft/VMRAllocator/VMRAllocator.h"
 #include "guids.h"
 #include "isharedasync.h"
 #include "../DShowCapture/DShowUtilities.h"
-#include <dvdmedia.h>
+#include "dvdmedia.h"
 #include <evr9.h>
 #include "sage_DShowTVPlayer.h"
 #include "jni-util.h"

@@ -22,7 +22,7 @@
 #include "JeffMixer.h"
 #include "guids.h"
 #include <streams.h>
-#include <qedit.h>
+#include "qedit.h"
 #ifdef FUJITSU_BUILD
 #include <mmdeviceapi.h>
 #include <endpointvolume.h>
