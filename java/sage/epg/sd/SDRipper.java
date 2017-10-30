@@ -75,7 +75,7 @@ import java.util.StringTokenizer;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -108,6 +108,7 @@ public class SDRipper extends EPGDataSource
 
   public static final String SOURCE_LABEL = " (sdepg)";
   private static final String SOURCE_LINEUP_ID = "epg_sd_name";
+  private static final String ADD_LINEUP_BY_ID = "Add lineup by ID...";
 
   // This is the preferred rating body. You would only be interested in changing this if you live in
   // another country and want to see a more familiar rating system.
@@ -388,6 +389,8 @@ public class SDRipper extends EPGDataSource
       {
         case "AddLineup":
           return addLineupToAccount(value);
+        case "AddLineupByID":
+          return addLineupToAccountByID(value);
         case "DeleteLineup":
           return deleteLineupFromAccount(value);
         case "CurrentRegion":
@@ -484,7 +487,7 @@ public class SDRipper extends EPGDataSource
 
   public static String[] getRegions() throws IOException, SDException
   {
-    String returnValue[];
+    List<String> returnValue;
 
     refreshCountryRegionCache();
 
@@ -492,21 +495,28 @@ public class SDRipper extends EPGDataSource
 
     try
     {
-      returnValue = new String[regions.length];
+      returnValue = new ArrayList<>(regions.length);
       int i = 0;
       for (SDRegion region : regions)
       {
-        returnValue[i++] = region.getRegion();
+        // ZZZ correlates with a legacy feature of Schedules Direct for satellite feeds. It doesn't
+        // currently return anything and it doesn't appear that it will ever be used for anything.
+        // We can return this to the list if that changes in the future, but for now it's better to
+        // not have it.
+        if (!region.getRegion().equals("ZZZ"))
+          returnValue.add(region.getRegion());
       }
+      // Add the option to add by ID if you already know what the ID is.
+      returnValue.add(ADD_LINEUP_BY_ID);
     }
     finally
     {
       sessionLock.readLock().unlock();
     }
 
-    if (Sage.DBG) System.out.println("SDEPG Returning regions: " + Arrays.toString(returnValue));
+    if (Sage.DBG) System.out.println("SDEPG Returning regions: " + returnValue);
 
-    return returnValue;
+    return returnValue.toArray(Pooler.EMPTY_STRING_ARRAY);
   }
 
   public static String[] getCountries(String region) throws IOException, SDException
@@ -728,7 +738,11 @@ public class SDRipper extends EPGDataSource
         // Remove any lineups we already have added to the account.
         for (SDAccountLineup accountLineup : accountLineups.getLineups())
         {
-          if (accountLineup.getUri().equals(lineup.getUri())) {
+          // 06/09/2017 JS: We were using getURI() here, but when a lineup is deleted, the URI does
+          // not exist and would throw a null pointer exception. getLineup() is always existential
+          // according to the API and is equally unique, so we are using that instead.
+          if (accountLineup.getLineup().equals(lineup.getLineup()))
+          {
             lineupName = null;
             break;
           }
@@ -842,7 +856,10 @@ public class SDRipper extends EPGDataSource
 
     screenFormatBuilder.append(lineup.getName());
 
-    if (!lineup.getName().equals(lineup.getLocation()))
+    // When a lineup is deleted, location is null.
+    if (lineup.getLocation() == null)
+      screenFormatBuilder.append(" - ").append(lineup.getLineup());
+    else if (!lineup.getName().equals(lineup.getLocation()))
       screenFormatBuilder.append(" - ").append(lineup.getLocation());
 
     return screenFormatBuilder.toString();
@@ -913,7 +930,7 @@ public class SDRipper extends EPGDataSource
       // either way.
       if (lineupName.equals(compareLineupName + " - " + lineup.getLineup()) || compareLineupName.equals(lineupName))
       {
-        int returnValue = session.deleteLineup(lineup.getUri());
+        int returnValue = session.deleteLineup(lineup);
         if (Sage.DBG) System.out.println("SDEPG Deleted lineup '" + lineupName + "' with " + returnValue + " changes remaining.");
         return returnValue;
       }
@@ -958,6 +975,19 @@ public class SDRipper extends EPGDataSource
     int returnValue = ensureSession().addLineup(lineup.getUri());
     if (Sage.DBG) System.out.println("SDEPG Added lineup '" + lineupName + "' with " + returnValue + " changes remaining.");
     return returnValue;
+  }
+
+  /**
+   * Add a lineup to the Schedules Direct account.
+   *
+   * @param lineupID The ID of the lineup as provided by {@link SDHeadendLineup#getLineup()}.
+   * @return The number of account add/remove changes remaining.
+   * @throws IOException If there is an I/O related error.
+   * @throws SDException If there is a problem working with Schedules Direct.
+   */
+  public static int addLineupToAccountByID(String lineupID) throws IOException, SDException
+  {
+    return ensureSession().addLineupByID(lineupID);
   }
 
   /**
@@ -2186,10 +2216,36 @@ public class SDRipper extends EPGDataSource
           if (Sage.DBG) System.out.println("SDEPG Attempting to import images for " +
             peopleSize + " pe" + (peopleSize == 1 ? "rson" : "ople") + "...");
 
-          int remainingThreads = 0;
+          int remainingImports;
           final AtomicInteger totalPeople = new AtomicInteger(0);
-          BlockingQueue<Runnable> queue = new ArrayBlockingQueue<>(30);
-          ThreadPoolExecutor executor = new ThreadPoolExecutor(1, 15, 5000, TimeUnit.MILLISECONDS, queue);
+          BlockingQueue<Runnable> queue = new ArrayBlockingQueue<>(9);
+          // We are using a fixed thread size so they don't get re-created ever. This was a big
+          // problem for users with slow internet connections because a full minute would actually
+          // timeout while this thread was executing, then a new thread would need to spin up.
+          ThreadPoolExecutor executor = new ThreadPoolExecutor(3, 3, 0L, TimeUnit.MILLISECONDS, queue) {
+            @Override
+            public ThreadFactory getThreadFactory()
+            {
+              return new ThreadFactory()
+              {
+                @Override
+                public Thread newThread(Runnable r)
+                {
+                  if (Sage.DBG) System.out.println("SDEPG Starting new import thread...");
+                  Thread returnThread = new Thread(r);
+                  returnThread.setName("SDEPG-Import");
+                  // I don't believe this has created any issues, but let's not allow these threads
+                  // to run at the same priority as threads that directly impact the UI experience
+                  // just in case.
+                  returnThread.setPriority(Thread.MIN_PRIORITY + 1);
+                  return returnThread;
+                }
+              };
+            }
+          };
+
+          // If the queue is currently full, do the lookup on this thread.
+          executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
 
           for (SDPerson nextPerson : addedAliases)
           {
@@ -2201,84 +2257,87 @@ public class SDRipper extends EPGDataSource
               @Override
               public void run()
               {
-                String personName = person.getName();
-                int personId = person.getPersonIdAsInt();
-                int nameId = person.getNameIdAsInt();
-                String lookupPersonId = person.getPersonId();
-
-                // If these don't match, this is an alias.
-                if (personId != 0 && personId == nameId)
-                  personId *= -1;
-
-                // We don't have any sources for these at the moment. It might not be a bad idea to see
-                // if we can hook into well-established free sources reliably for this extra data
-                // (e.g. TheTVDB.com).
-                int personDob = 0;
-                int personDod = 0;
-                String birthPlace = "";
-                short yearList[] = Pooler.EMPTY_SHORT_ARRAY;
-                String awardList[] = Pooler.EMPTY_STRING_ARRAY;
-
-                byte headShotUrls[][];
-                if (lookupPersonId.length() > 0)
+                try
                 {
-                  try
+                  String personName = person.getName();
+                  int personId = person.getPersonIdAsInt();
+                  int nameId = person.getNameIdAsInt();
+                  String lookupPersonId = person.getPersonId();
+
+                  // If these don't match, this is an alias.
+                  if (personId != 0 && personId == nameId)
+                    personId *= -1;
+
+                  // We don't have any sources for these at the moment. It might not be a bad idea
+                  // to see if we can hook into well-established free sources reliably for this
+                  // extra data (e.g. TheTVDB.com).
+                  int personDob = 0;
+                  int personDod = 0;
+                  String birthPlace = "";
+                  short yearList[] = Pooler.EMPTY_SHORT_ARRAY;
+                  String awardList[] = Pooler.EMPTY_STRING_ARRAY;
+
+                  byte headShotUrls[][];
+                  if (lookupPersonId.length() > 0)
                   {
-                    headShotUrls = SDImages.encodeHeadShots(ensureSession().getCelebrityImages(lookupPersonId));
-                  }
-                  catch (Exception e)
-                  {
-                    // Issues in getting head-shots should not be considered a significant
-                    // issue, but we will report it in case it becomes the source of a major
-                    // issue.
-                    SDSageSession.writeDebugException(e);
-                    if (Sage.DBG)
+                    try
                     {
-                      System.out.println("SDEPG Unable to get head-shots for: " + person);
-                      e.printStackTrace(System.out);
+                      headShotUrls = SDImages.encodeHeadShots(ensureSession().getCelebrityImages(lookupPersonId));
                     }
+                    catch (Throwable e)
+                    {
+                      // Issues in getting head-shots should not be considered a significant issue,
+                      // but we will report it in case it becomes the source of a major issue.
+                      SDSageSession.writeDebugException(e);
+                      if (Sage.DBG)
+                      {
+                        System.out.println("SDEPG Unable to get head-shots for: " + person);
+                        e.printStackTrace(System.out);
+                      }
+                      headShotUrls = Pooler.EMPTY_2D_BYTE_ARRAY;
+                    }
+                  }
+                  else
+                  {
                     headShotUrls = Pooler.EMPTY_2D_BYTE_ARRAY;
                   }
+
+                  // Since no other details would be updated, we can just skip this update
+                  // completely. This should be removed or expanded if more data becomes available
+                  // in the future.
+                  if (headShotUrls.length == 0)
+                    return;
+
+                  totalPeople.incrementAndGet();
+
+                  //System.out.println("SDEPG added head-shots for: " + person);
+                  threadWiz.addPerson(personName, personId, personDob, personDod, birthPlace,
+                    yearList, awardList, headShotUrls, DBObject.MEDIA_MASK_TV);
                 }
-                else
+                catch (Throwable e)
                 {
-                  headShotUrls = Pooler.EMPTY_2D_BYTE_ARRAY;
+                  System.out.println("SDEPG Unexpected exception getting head-shots for: " + person);
+                  e.printStackTrace(System.out);
                 }
-
-                // Since no other details would be updated, we can just skip this update completely.
-                // This should be removed or expanded if more data becomes available in the future.
-                if (headShotUrls.length == 0)
-                  return;
-
-                totalPeople.incrementAndGet();
-
-                //System.out.println("SDEPG added head-shots for: " + person);
-                threadWiz.addPerson(personName, personId, personDob, personDod, birthPlace,
-                  yearList, awardList, headShotUrls, DBObject.MEDIA_MASK_TV);
               }
             };
 
-            try
-            {
-              executor.execute(runnable);
-            }
-            catch (RejectedExecutionException e)
-            {
-              // If the queue is currently full, do the lookup on this thread.
-              runnable.run();
-            }
+            executor.execute(runnable);
           }
 
           executor.shutdown();
-          executor.awaitTermination(5000, TimeUnit.MILLISECONDS);
+          // Some people have extremely slow internet connections that actually warrant this lengthy
+          // wait. This will return the instant the queue is empty, so it's not like everyone will
+          // be waiting for 5 minutes to pass.
+          executor.awaitTermination(5, TimeUnit.MINUTES);
           // It's not a problem to not wait for the potentially remaining threads to complete. The
           // operation is thread-safe.
           addedAliases.clear();
-          remainingThreads = queue.size();
+          remainingImports = queue.size();
           peopleSize = totalPeople.get();
           if (Sage.DBG) System.out.println("SDEPG Imported images for " +
             peopleSize + " pe" + (peopleSize == 1 ? "rson" : "ople") +
-            " (+" + remainingThreads + ")");
+            " (+" + remainingImports + ")");
         }
 
         // If the value isn't -1, that means some data was not able to be received immediately.
@@ -2513,10 +2572,15 @@ public class SDRipper extends EPGDataSource
           for (Iterator<Integer> iterator = returnValue.keySet().iterator(); iterator.hasNext(); )
           {
             Integer stationID = iterator.next();
-            Airing airings[] = Wizard.getInstance().getAirings(stationID, currTime, currTime + 1, true);
-            if (airings == null || airings.length == 0 || wiz.isNoShow(airings[0]))
+            Airing airings[] = Wizard.getInstance().getAirings(stationID, currTime, currTime + 1, false);
+            if (airings == null || airings.length == 0)
             {
               if (Sage.DBG) System.out.println("SDEPG Removing hashes for station " + stationID);
+              iterator.remove();
+            }
+            else if (wiz.isNoShow(airings[0]))
+            {
+              if (Sage.DBG) System.out.println("SDEPG Removing hashes for station " + stationID + " because " + airings[0] + " is no show.");
               iterator.remove();
             }
           }

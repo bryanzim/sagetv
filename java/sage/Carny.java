@@ -58,13 +58,13 @@ public final class Carny implements Runnable
   private static final String MAP_DENSITY = "carny_map_density";
   static final String CARNY_KEY = "carny";
 
-  private static final long LOOKAHEAD = Sage.EMBEDDED ? 10*24*60*60*1000L : 14*24*60*60*1000L;
+  private static final long LOOKAHEAD = 14*24*60*60*1000L;
   /*
    * NOTE: I CHANGED THIS ON 7/22/03. I THINK IT'S WHY ITS RECORDING
    * EXTRA STUFF, BECAUSE ANYTHING WILL COME THROUGH WITH AT LEAST THIS PROBABILITY
    */
   private static final float MIN_WP = 0;//1e-6f;
-  public static final long SLEEP_PERIOD = Sage.EMBEDDED ? 120 : 30;
+  public static final long SLEEP_PERIOD = 30;
   // The processor count is used to limit the number of threads we will spin up for agent processing.
   public static final int PROCESSOR_COUNT = Math.max(Runtime.getRuntime().availableProcessors(), 1);
 
@@ -120,7 +120,7 @@ public final class Carny implements Runnable
     jobs = new Vector<Object[]>();
     alive = true;
     wiz = Wizard.getInstance();
-    trends = Sage.EMBEDDED ? new int[0] : new int[] { Agent.TITLE_MASK | Agent.FIRSTRUN_MASK, Agent.TITLE_MASK | Agent.RERUN_MASK,
+    trends = new int[] { Agent.TITLE_MASK | Agent.FIRSTRUN_MASK, Agent.TITLE_MASK | Agent.RERUN_MASK,
         Agent.CHANNEL_MASK | Agent.CATEGORY_MASK,
         Agent.NETWORK_MASK | Agent.CATEGORY_MASK, Agent.ACTOR_MASK,
         Agent.CHANNEL_MASK | Agent.PR_MASK, Agent.CATEGORY_MASK | Agent.PR_MASK };
@@ -232,12 +232,9 @@ public final class Carny implements Runnable
 
   void incWatchCount()
   {
-    if (!Sage.EMBEDDED)
+    synchronized (GLOBAL_WATCH_COUNT)
     {
-      synchronized (GLOBAL_WATCH_COUNT)
-      {
-        Sage.putInt(prefs + GLOBAL_WATCH_COUNT, ++globalWatchCount);
-      }
+      Sage.putInt(prefs + GLOBAL_WATCH_COUNT, ++globalWatchCount);
     }
   }
 
@@ -249,10 +246,7 @@ public final class Carny implements Runnable
     if (wCount >= globalWatchCount)
     {
       globalWatchCount = wCount + 1;
-      if (!Sage.EMBEDDED)
-      {
-        Sage.putInt(prefs + GLOBAL_WATCH_COUNT, globalWatchCount);
-      }
+      Sage.putInt(prefs + GLOBAL_WATCH_COUNT, globalWatchCount);
     }
   }
 
@@ -261,7 +255,6 @@ public final class Carny implements Runnable
       Person person, int role, String rated, String year, String pr, String network,
       String chanName, int slotType, int[] timeslots, String keyword)
   {
-    if (SageConstants.LITE) return null;
     Agent rv = null;
     try {
       wiz.acquireWriteLock(Wizard.AGENT_CODE);
@@ -295,8 +288,8 @@ public final class Carny implements Runnable
       wiz.releaseWriteLock(Wizard.AGENT_CODE);
     }
 
-    long defaultFavoriteStartPadding = Sage.getLong("default_favorite_start_padding", Sage.EMBEDDED ? 5*Sage.MILLIS_PER_MIN : 0);
-    long defaultFavoriteStopPadding = Sage.getLong("default_favorite_stop_padding", Sage.EMBEDDED ? 5*Sage.MILLIS_PER_MIN : 0);
+    long defaultFavoriteStartPadding = Sage.getLong("default_favorite_start_padding", 0);
+    long defaultFavoriteStopPadding = Sage.getLong("default_favorite_stop_padding", 0);
     if (defaultFavoriteStartPadding != 0)
     {
       rv.setStartPadding(defaultFavoriteStartPadding);
@@ -403,7 +396,6 @@ public final class Carny implements Runnable
       Person person, int role, String rated, String year, String pr, String network,
       String chanName, int slotType, int[] timeslots, String keyword)
   {
-    if (SageConstants.LITE) return null;
     if (fav == null) return null;
     List<Agent> allFavs = new ArrayList<Agent>();
     Agent oldFav = (Agent) fav.clone();
@@ -578,7 +570,6 @@ public final class Carny implements Runnable
   }
   public void removeFavorite(Agent fav)
   {
-    if (SageConstants.LITE) return;
     if (Sage.DBG) System.out.println("Removing Favorite: " + fav);
     List<Agent> allFavs = new ArrayList<Agent>();
     try {
@@ -777,7 +768,7 @@ public final class Carny implements Runnable
   private void submitWasteJob(Airing air, boolean doWaste, boolean manual)
   {
     // Don't track Wasted for non-TV content
-    if (SageConstants.LITE || !air.isTV()) return;
+    if (!air.isTV()) return;
     if (doWaste)
     {
       wiz.addWasted(air, manual);
@@ -945,7 +936,7 @@ public final class Carny implements Runnable
     // and be able to modify the information the agent is based on.
     Show s = wasteAir.getShow();
     // We don't track 'wasted' objects on embedded so disable that here
-    if (s == null || !wasteAir.isTV() || Sage.EMBEDDED) return;
+    if (s == null || !wasteAir.isTV()) return;
     Stringer stit = s.title;
     Agent[] allAgents = wiz.getAgents();
     StringBuilder sbCache = new StringBuilder();
@@ -1303,7 +1294,7 @@ public final class Carny implements Runnable
     remAirSet = null;
     CarnyCache seedCache = new CarnyCache(allAirsMap, remAirsMap, watchAirsMap, wastedAirsMap);
 
-    if (Sage.DBG) System.out.println("CARNY Processing " + allAgents.length + " Agents & " + allAirs.length + " Airs");
+    if (Sage.DBG) System.out.println("CARNY Processing " + submittedAgents + " Agents & " + allAirs.length + " Airs");
 
     boolean controlCPUUsage = doneInit && submittedAgents > 50 && Sage.getBoolean("control_profiler_cpu_usage", true);
     boolean useLegacyKeyword = Sage.getBoolean("use_legacy_keyword_favorites", true);
@@ -1543,10 +1534,31 @@ public final class Carny implements Runnable
       }
     }
 
+
+    if (workCanceled)
+      return;
+
     // If we have no agents to process, we will also get a null firstCallback without also getting
     // workCanceled.
-    if (workCanceled || firstCallback == null)
+    if (firstCallback == null)
+    {
+      if (Sage.DBG) System.out.println("CARNY has no agents to process.");
+
+      // This is here purely for aesthetic reasons. Otherwise all we see is 0%.
+      if (!doneInit)
+      {
+        lastMessage = Sage.rez("Module_Init_Progress", new Object[] { Sage.rez("Profiler"), new Double(1)});
+        Sage.setSplashText(lastMessage);
+      }
+
+      // We would skip this step otherwise. We could get here with an actual schedule by not having
+      // any automatically created agents and removing our last favorite.
+      if (doneInit)
+        SchedulerSelector.getInstance().kick(false);
+      // This must be set or Scheduler and Seeker will not function.
+      prepped = true;
       return;
+    }
 
     final List<Agent> traitors = firstCallback.traitors;
     final Set<Airing> newLoveAirSet = new HashSet<>(firstCallback.newLoveAirSet);
@@ -2691,7 +2703,9 @@ public final class Carny implements Runnable
 
           // Skip this stuff
           Show show = agentPot.getShow();
-          if ((show != null && show.title.equalsIgnoreCase(paidProgRez)) || wiz.isNoShow(agentPot.showID))
+          // The show title can be null.
+          if ((show != null && show.title != null && show.title.equalsIgnoreCase(paidProgRez)) ||
+            wiz.isNoShow(agentPot.showID))
             continue;
 
           callback.addAirSet(agentPot);

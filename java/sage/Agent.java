@@ -49,7 +49,7 @@ public class Agent extends DBObject implements Favorite
   // Enables checking all airings against the optimized airings. This is for testing only.
   static final boolean VERIFY_AIRING_OPTIMIZATION = false;
 
-  private static final int CPU_CONTROL_MOD_COUNT = Sage.getInt("profiler_cpu_mod_count", Sage.EMBEDDED ? 2500 : 25000);
+  private static final int CPU_CONTROL_MOD_COUNT = Sage.getInt("profiler_cpu_mod_count", 25000);
 
   public static final int LOVE_MASK = 0x0001;
   public static final int TITLE_MASK = 0x0002;
@@ -772,7 +772,7 @@ public class Agent extends DBObject implements Favorite
         {
           Airing a = (Airing) allAirs[i];
           if (a == null) continue;
-          if (followsTrend(a, true, sbCache, true, ignoreDisabledFlag))
+          if (followsTrend(a, true, sbCache, false, ignoreDisabledFlag))
             rv.add(a);
           if ((i % CPU_CONTROL_MOD_COUNT) == 0 && controlCPUUsage)
             try {Thread.sleep(Carny.SLEEP_PERIOD);} catch (Exception e) {}

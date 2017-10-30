@@ -24,8 +24,10 @@ import sage.epg.sd.gson.JsonObject;
 import sage.epg.sd.gson.JsonSyntaxException;
 import sage.epg.sd.gson.stream.JsonWriter;
 import sage.epg.sd.json.headend.SDHeadend;
+import sage.epg.sd.json.headend.SDHeadendLineup;
 import sage.epg.sd.json.images.SDImage;
 import sage.epg.sd.json.images.SDProgramImages;
+import sage.epg.sd.json.lineup.SDAccountLineup;
 import sage.epg.sd.json.lineup.SDAccountLineups;
 import sage.epg.sd.json.locale.SDLanguage;
 import sage.epg.sd.json.locale.SDRegion;
@@ -71,6 +73,10 @@ public abstract class SDSession
   private static final String GET_CELEBRITY_IMAGES = URL_VERSIONED + "/metadata/celebrity/";
   // Get supported sports that are in progress.
   private static final String GET_IN_PROGRESS_SPORT = URL_VERSIONED + "/metadata/stillRunning/";
+  // Delete a lineup that is no longer being updated.
+  private static final String DELETE_ACCOUNT_LINEUP = URL_VERSIONED + "/lineups/";
+  // Add a lineup by appended ID.
+  private static final String ADD_ACCOUNT_LINEUP = DELETE_ACCOUNT_LINEUP;
 
   // The character set to be used for outgoing communications.
   protected static final Charset OUT_CHARSET = StandardCharsets.UTF_8;
@@ -769,6 +775,32 @@ public abstract class SDSession
   }
 
   /**
+   * Add a new lineup to account.
+   *
+   * @param id The ID provided by a lineup from {@link SDHeadendLineup#getLineup()}.
+   * @return The number of account changes remaining.
+   * @throws IOException If there is an I/O related error.
+   * @throws SDException If there is a problem working with Schedules Direct.
+   */
+  public int addLineupByID(String id) throws IOException, SDException
+  {
+    URL url = new URL(ADD_ACCOUNT_LINEUP + id);
+    JsonObject reply = putAuthJson(url, JsonObject.class, null);
+
+    JsonElement codeElement = reply.get("code");
+    if (codeElement == null)
+      throw new SDException(SDErrors.SAGETV_UNKNOWN);
+
+    int code = codeElement.getAsInt();
+    if (code != 0)
+    {
+      SDErrors.throwErrorForCode(code);
+    }
+
+    return reply.get("changesRemaining").getAsInt();
+  }
+
+  /**
    * Get the lineups associated with this account.
    *
    * @return The lineups associated with this account.
@@ -790,14 +822,19 @@ public abstract class SDSession
   /**
    * Delete a lineup from account.
    *
-   * @param uri The URI provided by a lineup from <code>getLineups()</code>.
+   * @param lineup A lineup provided by {@link #getAccountLineups()}.
    * @return The number of account changes remaining.
    * @throws IOException If there is an I/O related error.
    * @throws SDException If there is a problem working with Schedules Direct.
    */
-  public int deleteLineup(String uri) throws IOException, SDException
+  public int deleteLineup(SDAccountLineup lineup) throws IOException, SDException
   {
-    URL url = new URL(URL_BASE + uri);
+    URL url;
+    if (lineup.getUri() != null)
+      url = new URL(URL_BASE + lineup.getUri());
+    else
+      url = new URL(DELETE_ACCOUNT_LINEUP + lineup.getLineup());
+
     JsonObject reply = deleteAuthJson(url, JsonObject.class);
 
     JsonElement codeElement = reply.get("code");

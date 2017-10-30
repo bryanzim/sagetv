@@ -1,5 +1,55 @@
 # Change Log
 
+* HD-PVR2 video capture device: add ability to select multiple audio inputs (Windows)
+* HD PVR 60 video capture device: new device support (Windows)
+
+## Version 9.1.7 (2017-09-24)
+* Fix: add support for 2nd tuner of Hauppauge WinTV-dualHD usb tuner stick (Windows).
+* Changes in the STV set 2017081201 for the next SageTV release v9.1.7.0:
+    * malore menus: Removed random misc adjectives after show titles; only display misc textafter the title if it is a star rating.
+	* Removed Zap2it logo from System Information.
+	* EPG Lineup configuration: Changed help text above option buttons, put Schedules Direct option at top of list, old built-in EPG option renamed as plugin option and moved down.
+	* Fixed Music by Artist filtering issue resulting in 0 songs per artist after entering 2nd and subsequent chars.
+	* Disabled access to YouTube, Google videos, and channels.com.
+	* Detailed Setup -> General: reworded the Sync System Clock option.
+	* Detailed Setup -> Advanced: removed Debug Logging enable/disable option because it is always enabled now.
+	* Configuration Wizard playback testing/configuration menu uses the "Default" decoder settings instead of SageTV MPEG decoders.
+	* Detailed Setup -> Customize: renamed extra option to mark channels in guide with non-Zap2it channel IDs to refer to non-Tribune IDs.
+	* Changed Zap2it text to Tribune elsewhere in the STV, since the EPG data fo the old built-in and new SD EPG data both ultimately come from Tribune.  
+* Fix: resolved 'Grey-scale channel logos are green and half-width' for Windows releases (was fixed for linux in 9.0.8.423 and newer)
+
+## Version 9.1.6 (2017-08-10)
+* Fix: Various fixes and cleanup on Linux Firewire and DVB.
+* Fix: Added support for all 4 tuners on the Hauppauge WinTV-quadHD tuner in Windows.
+* New: Add Schedules Direct lineup by ID.
+* Change: Removed ZZZ from Schedules Direct Regions because it doesn't do anything.
+* Fix: VOB and MP4 subtitles locking methods were not being called.
+* Fix: Fixes to HDHomeRun (and probably others) ATSC Scanning returning blank and garbled channels.
+* Fix: Reduced Schedules Direct person image import threads to 4 (including the execution thread) and added logging for when new threads are created for during the process.
+* Change: Removed unhelpful alias to original person log entries.
+* Fix: Fixed issue with Schedules Direct forcing a full airing re-import on stations that do not have a No Data airing.
+* Change: Lowered the priority of the Schedules Direct person image import threads.
+* Fix: Removed use of G1GC in Windows due to possible memory leak issues. 
+
+## Version 9.1.5 (2017-06-19)
+* Fix: Carny throws a null pointer exception if a show has a null title.
+
+## Version 9.1.4 (2017-06-11)
+* Fix: Schedules Direct deleted lineups were not removed from accounts correctly.
+* Fix: When checking for existing lineups and a deleted lineup exists, a null pointer exception was thrown.
+* Change: The SRT subtitle monitoring thread now uses Pooler.
+* Fix: Index out of bounds exception while getting recommendations from Schedules Direct.
+
+## Version 9.1.3 (2017-05-30)
+* Fix: A missing space in an if test causes the Linux start script to fail.
+
+## Version 9.1.2 (2017-05-30)
+* Fix: Changed awk parsing to use sed to clean up the Java version check.
+* Fix: API methods GetFavoriteAirings() and GetPotentialFavoriteAirings() were returning all airings for keyword favorites.
+* New: Increased possible range for scheduling lookahead to 21 days. The default is still 14 days.
+* Fix: Removed check in Scheduler that was preventing a future airing beyond lookahead from being considered to resolve a conflict.
+* Fix: Fixed Carny not being marked prepped on startup when no agents exist.
+
 ## Version 9.1.1 (2017-05-22)
 * Fix: Fixed a problem with awk parsing in Ubuntu
 
@@ -70,3 +120,22 @@
 ## Version 9.0.7 (2016-08-10)
 * New: Added SageTVPluginsDev.d directory support (See [SageTVPluginsDev README](SageTVPluginsDev.md))
 * New: Added direct JAR linking in SageTV Plugin Manifest (ie, no need to repackage library plugins as .zip files)
+
+
+#### Notes about incrementing versions for developers:
+
+* If you are the first to commit changes after a release, ensure that the following have been incremented beyond the last release:
+    * MICRO_VERSION in sage/Version.java
+* If you make any changes to stvs/SageTV7/SageTV7.xml, ensure that the following are updated in the STV:
+    * AddGlobalContext( "STVversionText", "August 12, 2017" )
+        * This should match the date of the commit.
+    * AddGlobalContext( "ThisSTVSetVersionNum", "2017081201" )
+        * This should match the date of the commit and if there was more than one commit the same day, the last two digits should be incremented.
+        * The format is YYYYMMDDVV.
+        * YYYY is the year.
+        * MM if the month number.
+        * DD is the day of the month.
+        * VV is the commit version for this date. This resets to 01 if the date changes.
+    * STVVersion [="9.1.7.0"]
+        * This should start with MAJOR_VERSION.MINOR_VERSION.MICRO_VERSION in sage/Version.java
+        * The last number should be incremented for each update of the STV for the MAJOR_VERSION.MINOR_VERSION.MICRO_VERSION SageTV release, starting with 0 for the first STV version of a new release.
