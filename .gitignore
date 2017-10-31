@@ -55,6 +55,7 @@ config*.log
 /third_party/**/*.sbr
 /third_party/**/*.tlog
 /third_party/**/*.vcxproj*
+/third_party/ffmpeg/ffbuild/**
 
 # gradle/eclipse stuff
 /bin/
