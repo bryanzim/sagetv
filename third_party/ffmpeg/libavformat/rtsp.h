@@ -28,9 +28,6 @@
 #include "network.h"
 #include "httpauth.h"
 
-#include "libavutil/log.h"
-#include "libavutil/opt.h"
-
 /**
  * Network layer over which RTP/etc packet data will be transported.
  */
@@ -38,14 +35,7 @@ enum RTSPLowerTransport {
     RTSP_LOWER_TRANSPORT_UDP = 0,           /**< UDP/unicast */
     RTSP_LOWER_TRANSPORT_TCP = 1,           /**< TCP; interleaved in RTSP */
     RTSP_LOWER_TRANSPORT_UDP_MULTICAST = 2, /**< UDP/multicast */
-    RTSP_LOWER_TRANSPORT_NB,
-    RTSP_LOWER_TRANSPORT_HTTP = 8,          /**< HTTP tunneled - not a proper
-                                                 transport mode as such,
-                                                 only for use via AVOptions */
-    RTSP_LOWER_TRANSPORT_CUSTOM = 16,       /**< Custom IO - not a public
-                                                 option for lower_transport_mask,
-                                                 but set in the SDP demuxer based
-                                                 on a flag. */
+    RTSP_LOWER_TRANSPORT_NB
 };
 
 /**
@@ -56,7 +46,6 @@ enum RTSPLowerTransport {
 enum RTSPTransport {
     RTSP_TRANSPORT_RTP, /**< Standards-compliant RTP */
     RTSP_TRANSPORT_RDT, /**< Realmedia Data Transport */
-    RTSP_TRANSPORT_RAW, /**< Raw data (over UDP) */
     RTSP_TRANSPORT_NB
 };
 
@@ -70,13 +59,12 @@ enum RTSPControlTransport {
 };
 
 #define RTSP_DEFAULT_PORT   554
-#define RTSPS_DEFAULT_PORT  322
 #define RTSP_MAX_TRANSPORTS 8
 #define RTSP_TCP_MAX_PACKET_SIZE 1472
 #define RTSP_DEFAULT_NB_AUDIO_CHANNELS 1
 #define RTSP_DEFAULT_AUDIO_SAMPLERATE 44100
 #define RTSP_RTP_PORT_MIN 5000
-#define RTSP_RTP_PORT_MAX 65000
+#define RTSP_RTP_PORT_MAX 10000
 
 /**
  * This describes a single item in the "Transport:" line of one stream as
@@ -108,11 +96,7 @@ typedef struct RTSPTransportField {
      * packets will be allowed to make before being discarded. */
     int ttl;
 
-    /** transport set to record data */
-    int mode_record;
-
-    struct sockaddr_storage destination; /**< destination IP address */
-    char source[INET6_ADDRSTRLEN + 1]; /**< source IP address */
+    uint32_t destination; /**< destination IP address */
 
     /** data/packet transport protocol; e.g. RTP or RDT */
     enum RTSPTransport transport;
@@ -175,16 +159,6 @@ typedef struct RTSPMessageHeader {
      * http://tools.ietf.org/html/draft-stiemerling-rtsp-announce-00
      * for a complete list of supported values. */
     int notice;
-
-    /** The "reason" is meant to specify better the meaning of the error code
-     * returned
-     */
-    char reason[256];
-
-    /**
-     * Content type header
-     */
-    char content_type[64];
 } RTSPMessageHeader;
 
 /**
@@ -200,7 +174,7 @@ enum RTSPClientState {
 };
 
 /**
- * Identify particular servers that require special handling, such as
+ * Identifies particular servers that require special handling, such as
  * standards-incompliant "Transport:" lines in the SETUP request.
  */
 enum RTSPServerType {
@@ -213,10 +187,9 @@ enum RTSPServerType {
 /**
  * Private data for the RTSP demuxer.
  *
- * @todo Use AVIOContext instead of URLContext
+ * @todo Use ByteIOContext instead of URLContext
  */
 typedef struct RTSPState {
-    const AVClass *class;             /**< Class for private options. */
     URLContext *rtsp_hd; /* RTSP TCP connection handle */
 
     /** number of items in the 'rtsp_streams' variable */
@@ -237,6 +210,9 @@ typedef struct RTSPState {
      * whenever we resume playback. Either way, the value is only used once,
      * see rtsp_read_play() and rtsp_read_seek(). */
     int64_t seek_timestamp;
+
+    /* XXX: currently we use unbuffered input */
+    //    ByteIOContext rtsp_gb;
 
     int seq;                          /**< RTSP command sequence number */
 
@@ -266,9 +242,6 @@ typedef struct RTSPState {
      * of RTSPMessageHeader->real_challenge */
     enum RTSPServerType server_type;
 
-    /** the "RealChallenge1:" field from the server */
-    char real_challenge[64];
-
     /** plaintext authorization line (username:password) */
     char auth[128];
 
@@ -289,11 +262,7 @@ typedef struct RTSPState {
 
     /** stream setup during the last frame read. This is used to detect if
      * we need to subscribe or unsubscribe to any new streams. */
-    enum AVDiscard *real_setup_cache;
-
-    /** current stream setup. This is a temporary buffer used to compare
-     * current setup to previous frame setup. */
-    enum AVDiscard *real_setup;
+    enum AVDiscard real_setup_cache[MAX_STREAMS];
 
     /** the last value of the "SET_PARAMETER Subscribe:" RTSP command.
      * this is used to send the same "Unsubscribe:" if stream setup changed,
@@ -316,12 +285,8 @@ typedef struct RTSPState {
      * other cases, this is a copy of AVFormatContext->filename. */
     char control_uri[1024];
 
-    /** The following are used for parsing raw mpegts in udp */
-    //@{
-    struct MpegTSContext *ts;
-    int recvbuf_pos;
-    int recvbuf_len;
-    //@}
+    /** The synchronized start time of the output streams. */
+    int64_t start_time;
 
     /** Additional output handle, used when input and output are done
      * separately, eg for HTTP tunneling. */
@@ -329,103 +294,10 @@ typedef struct RTSPState {
 
     /** RTSP transport mode, such as plain or tunneled. */
     enum RTSPControlTransport control_transport;
-
-    /* Number of RTCP BYE packets the RTSP session has received.
-     * An EOF is propagated back if nb_byes == nb_streams.
-     * This is reset after a seek. */
-    int nb_byes;
-
-    /** Reusable buffer for receiving packets */
-    uint8_t* recvbuf;
-
-    /**
-     * A mask with all requested transport methods
-     */
-    int lower_transport_mask;
-
-    /**
-     * The number of returned packets
-     */
-    uint64_t packets;
-
-    /**
-     * Polling array for udp
-     */
-    struct pollfd *p;
-    int max_p;
-
-    /**
-     * Whether the server supports the GET_PARAMETER method.
-     */
-    int get_parameter_supported;
-
-    /**
-     * Do not begin to play the stream immediately.
-     */
-    int initial_pause;
-
-    /**
-     * Option flags for the chained RTP muxer.
-     */
-    int rtp_muxer_flags;
-
-    /** Whether the server accepts the x-Dynamic-Rate header */
-    int accept_dynamic_rate;
-
-    /**
-     * Various option flags for the RTSP muxer/demuxer.
-     */
-    int rtsp_flags;
-
-    /**
-     * Mask of all requested media types
-     */
-    int media_type_mask;
-
-    /**
-     * Minimum and maximum local UDP ports.
-     */
-    int rtp_port_min, rtp_port_max;
-
-    /**
-     * Timeout to wait for incoming connections.
-     */
-    int initial_timeout;
-
-    /**
-     * timeout of socket i/o operations.
-     */
-    int stimeout;
-
-    /**
-     * Size of RTP packet reordering queue.
-     */
-    int reordering_queue_size;
-
-    /**
-     * User-Agent string
-     */
-    char *user_agent;
-
-    char default_lang[4];
-    int buffer_size;
 } RTSPState;
 
-#define RTSP_FLAG_FILTER_SRC  0x1    /**< Filter incoming UDP packets -
-                                          receive packets only from the right
-                                          source address and port. */
-#define RTSP_FLAG_LISTEN      0x2    /**< Wait for incoming connections. */
-#define RTSP_FLAG_CUSTOM_IO   0x4    /**< Do all IO via the AVIOContext. */
-#define RTSP_FLAG_RTCP_TO_SOURCE 0x8 /**< Send RTCP packets to the source
-                                          address of received packets. */
-#define RTSP_FLAG_PREFER_TCP  0x10   /**< Try RTP via TCP first if possible. */
-
-typedef struct RTSPSource {
-    char addr[128]; /**< Source-specific multicast include source IP address (from SDP content) */
-} RTSPSource;
-
 /**
- * Describe a single stream, as identified by a single m= line block in the
+ * Describes a single stream, as identified by a single m= line block in the
  * SDP content. In the case of RDT, one RTSPStream can represent multiple
  * AVStreams. In this case, each AVStream in this set has similar content
  * (but different codec/bitrate).
@@ -446,16 +318,12 @@ typedef struct RTSPStream {
     /** The following are used only in SDP, not RTSP */
     //@{
     int sdp_port;             /**< port (from SDP content) */
-    struct sockaddr_storage sdp_ip; /**< IP address (from SDP content) */
-    int nb_include_source_addrs; /**< Number of source-specific multicast include source IP addresses (from SDP content) */
-    struct RTSPSource **include_source_addrs; /**< Source-specific multicast include source IP addresses (from SDP content) */
-    int nb_exclude_source_addrs; /**< Number of source-specific multicast exclude source IP addresses (from SDP content) */
-    struct RTSPSource **exclude_source_addrs; /**< Source-specific multicast exclude source IP addresses (from SDP content) */
+    struct in_addr sdp_ip;    /**< IP address (from SDP content) */
     int sdp_ttl;              /**< IP Time-To-Live (from SDP content) */
     int sdp_payload_type;     /**< payload type */
     //@}
 
-    /** The following are used for dynamic protocols (rtpdec_*.c/rdt.c) */
+    /** The following are used for dynamic protocols (rtp_*.c/rdt.c) */
     //@{
     /** handler structure */
     RTPDynamicProtocolHandler *dynamic_handler;
@@ -463,21 +331,35 @@ typedef struct RTSPStream {
     /** private data associated with the dynamic protocol */
     PayloadContext *dynamic_protocol_context;
     //@}
-
-    /** Enable sending RTCP feedback messages according to RFC 4585 */
-    int feedback;
-
-    /** SSRC for this stream, to allow identifying RTCP packets before the first RTP packet */
-    uint32_t ssrc;
-
-    char crypto_suite[40];
-    char crypto_params[100];
 } RTSPStream;
 
-void ff_rtsp_parse_line(AVFormatContext *s,
-                        RTSPMessageHeader *reply, const char *buf,
-                        RTSPState *rt, const char *method);
+void ff_rtsp_parse_line(RTSPMessageHeader *reply, const char *buf,
+                        HTTPAuthState *auth_state);
 
+#if LIBAVFORMAT_VERSION_INT < (53 << 16)
+extern int rtsp_default_protocols;
+#endif
+extern int rtsp_rtp_port_min;
+extern int rtsp_rtp_port_max;
+
+/**
+ * Send a command to the RTSP server without waiting for the reply.
+ *
+ * @param s RTSP (de)muxer context
+ * @param method the method for the request
+ * @param url the target url for the request
+ * @param headers extra header lines to include in the request
+ * @param send_content if non-null, the data to send as request body content
+ * @param send_content_length the length of the send_content data, or 0 if
+ *                            send_content is null
+ *
+ * @return zero if success, nonzero otherwise
+ */
+int ff_rtsp_send_cmd_with_content_async(AVFormatContext *s,
+                                        const char *method, const char *url,
+                                        const char *headers,
+                                        const unsigned char *send_content,
+                                        int send_content_length);
 /**
  * Send a command to the RTSP server without waiting for the reply.
  *
@@ -536,15 +418,13 @@ int ff_rtsp_send_cmd(AVFormatContext *s, const char *method,
  *                   data packets (if they are encountered), until a reply
  *                   has been fully parsed. If no more data is available
  *                   without parsing a reply, it will return an error.
- * @param method the RTSP method this is a reply to. This affects how
- *               some response headers are acted upon. May be NULL.
  *
  * @return 1 if a data packets is ready to be received, -1 on error,
  *          and 0 on success.
  */
 int ff_rtsp_read_reply(AVFormatContext *s, RTSPMessageHeader *reply,
                        unsigned char **content_ptr,
-                       int return_on_interleaved_data, const char *method);
+                       int return_on_interleaved_data);
 
 /**
  * Skip a RTP/TCP interleaved packet.
@@ -572,71 +452,8 @@ void ff_rtsp_close_streams(AVFormatContext *s);
 /**
  * Close all connection handles within the RTSP (de)muxer
  *
- * @param s RTSP (de)muxer context
+ * @param rt RTSP (de)muxer context
  */
-void ff_rtsp_close_connections(AVFormatContext *s);
-
-/**
- * Get the description of the stream and set up the RTSPStream child
- * objects.
- */
-int ff_rtsp_setup_input_streams(AVFormatContext *s, RTSPMessageHeader *reply);
-
-/**
- * Announce the stream to the server and set up the RTSPStream child
- * objects for each media stream.
- */
-int ff_rtsp_setup_output_streams(AVFormatContext *s, const char *addr);
-
-/**
- * Parse RTSP commands (OPTIONS, PAUSE and TEARDOWN) during streaming in
- * listen mode.
- */
-int ff_rtsp_parse_streaming_commands(AVFormatContext *s);
-
-/**
- * Parse an SDP description of streams by populating an RTSPState struct
- * within the AVFormatContext; also allocate the RTP streams and the
- * pollfd array used for UDP streams.
- */
-int ff_sdp_parse(AVFormatContext *s, const char *content);
-
-/**
- * Receive one RTP packet from an TCP interleaved RTSP stream.
- */
-int ff_rtsp_tcp_read_packet(AVFormatContext *s, RTSPStream **prtsp_st,
-                            uint8_t *buf, int buf_size);
-
-/**
- * Send buffered packets over TCP.
- */
-int ff_rtsp_tcp_write_packet(AVFormatContext *s, RTSPStream *rtsp_st);
-
-/**
- * Receive one packet from the RTSPStreams set up in the AVFormatContext
- * (which should contain a RTSPState struct as priv_data).
- */
-int ff_rtsp_fetch_packet(AVFormatContext *s, AVPacket *pkt);
-
-/**
- * Do the SETUP requests for each stream for the chosen
- * lower transport mode.
- * @return 0 on success, <0 on error, 1 if protocol is unavailable
- */
-int ff_rtsp_make_setup_request(AVFormatContext *s, const char *host, int port,
-                               int lower_transport, const char *real_challenge);
-
-/**
- * Undo the effect of ff_rtsp_make_setup_request, close the
- * transport_priv and rtp_handle fields.
- */
-void ff_rtsp_undo_setup(AVFormatContext *s, int send_packets);
-
-/**
- * Open RTSP transport context.
- */
-int ff_rtsp_open_transport_ctx(AVFormatContext *s, RTSPStream *rtsp_st);
-
-extern const AVOption ff_rtsp_options[];
+void ff_rtsp_close_connections(AVFormatContext *rt);
 
 #endif /* AVFORMAT_RTSP_H */

@@ -1,4 +1,7 @@
-/*
+/**
+ * @file
+ * VP5 and VP6 compatible video decoder (common features)
+ *
  * Copyright (C) 2006  Aurelien Jacobs <aurel@gnuage.org>
  *
  * This file is part of FFmpeg.
@@ -18,91 +21,57 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-/**
- * @file
- * VP5 and VP6 compatible video decoder (common features)
- */
-
 #ifndef AVCODEC_VP56_H
 #define AVCODEC_VP56_H
 
-#include "avcodec.h"
+#include "vp56data.h"
+#include "dsputil.h"
 #include "get_bits.h"
-#include "hpeldsp.h"
 #include "bytestream.h"
-#include "h264chroma.h"
-#include "videodsp.h"
-#include "vp3dsp.h"
+#include "cabac.h"
 #include "vp56dsp.h"
 
 typedef struct vp56_context VP56Context;
-
-typedef enum {
-    VP56_FRAME_NONE     =-1,
-    VP56_FRAME_CURRENT  = 0,
-    VP56_FRAME_PREVIOUS = 1,
-    VP56_FRAME_GOLDEN   = 2,
-    VP56_FRAME_GOLDEN2  = 3,
-} VP56Frame;
-
-typedef enum {
-    VP56_MB_INTER_NOVEC_PF = 0,  /**< Inter MB, no vector, from previous frame */
-    VP56_MB_INTRA          = 1,  /**< Intra MB */
-    VP56_MB_INTER_DELTA_PF = 2,  /**< Inter MB, above/left vector + delta, from previous frame */
-    VP56_MB_INTER_V1_PF    = 3,  /**< Inter MB, first vector, from previous frame */
-    VP56_MB_INTER_V2_PF    = 4,  /**< Inter MB, second vector, from previous frame */
-    VP56_MB_INTER_NOVEC_GF = 5,  /**< Inter MB, no vector, from golden frame */
-    VP56_MB_INTER_DELTA_GF = 6,  /**< Inter MB, above/left vector + delta, from golden frame */
-    VP56_MB_INTER_4V       = 7,  /**< Inter MB, 4 vectors, from previous frame */
-    VP56_MB_INTER_V1_GF    = 8,  /**< Inter MB, first vector, from golden frame */
-    VP56_MB_INTER_V2_GF    = 9,  /**< Inter MB, second vector, from golden frame */
-} VP56mb;
-
-typedef struct VP56Tree {
-  int8_t val;
-  int8_t prob_idx;
-} VP56Tree;
-
-typedef struct VP56mv {
-    DECLARE_ALIGNED(4, int16_t, x);
-    int16_t y;
-} VP56mv;
-
-#define VP56_SIZE_CHANGE 1
+typedef struct vp56_mv VP56mv;
 
 typedef void (*VP56ParseVectorAdjustment)(VP56Context *s,
                                           VP56mv *vect);
 typedef void (*VP56Filter)(VP56Context *s, uint8_t *dst, uint8_t *src,
-                           int offset1, int offset2, ptrdiff_t stride,
+                           int offset1, int offset2, int stride,
                            VP56mv mv, int mask, int select, int luma);
-typedef int  (*VP56ParseCoeff)(VP56Context *s);
+typedef void (*VP56ParseCoeff)(VP56Context *s);
 typedef void (*VP56DefaultModelsInit)(VP56Context *s);
 typedef void (*VP56ParseVectorModels)(VP56Context *s);
-typedef int  (*VP56ParseCoeffModels)(VP56Context *s);
+typedef void (*VP56ParseCoeffModels)(VP56Context *s);
 typedef int  (*VP56ParseHeader)(VP56Context *s, const uint8_t *buf,
-                                int buf_size);
+                                int buf_size, int *golden_frame);
 
-typedef struct VP56RangeCoder {
+typedef struct {
     int high;
     int bits; /* stored negated (i.e. negative "bits" is a positive number of
                  bits left) in order to eliminate a negate in cache refilling */
     const uint8_t *buffer;
     const uint8_t *end;
-    unsigned int code_word;
+    unsigned long code_word;
 } VP56RangeCoder;
 
-typedef struct VP56RefDc {
+typedef struct {
     uint8_t not_null_dc;
     VP56Frame ref_frame;
-    int16_t dc_coeff;
+    DCTELEM dc_coeff;
 } VP56RefDc;
 
-typedef struct VP56Macroblock {
+struct vp56_mv {
+    int x;
+    int y;
+};
+
+typedef struct {
     uint8_t type;
     VP56mv mv;
 } VP56Macroblock;
 
-typedef struct VP56Model {
+typedef struct {
     uint8_t coeff_reorder[64];       /* used in vp6 only */
     uint8_t coeff_index_to_pos[64];  /* used in vp6 only */
     uint8_t vector_sig[2];           /* delta sign */
@@ -121,13 +90,11 @@ typedef struct VP56Model {
 
 struct vp56_context {
     AVCodecContext *avctx;
-    H264ChromaContext h264chroma;
-    HpelDSPContext hdsp;
-    VideoDSPContext vdsp;
-    VP3DSPContext vp3dsp;
+    DSPContext dsp;
     VP56DSPContext vp56dsp;
-    uint8_t idct_scantable[64];
-    AVFrame *frames[4];
+    ScanTable scantable;
+    AVFrame frames[4];
+    AVFrame *framep[6];
     uint8_t *edge_emu_buffer_alloc;
     uint8_t *edge_emu_buffer;
     VP56RangeCoder c;
@@ -136,7 +103,6 @@ struct vp56_context {
     int sub_version;
 
     /* frame info */
-    int golden_frame;
     int plane_width[4];
     int plane_height[4];
     int mb_width;   /* number of horizontal MB */
@@ -146,17 +112,18 @@ struct vp56_context {
     int quantizer;
     uint16_t dequant_dc;
     uint16_t dequant_ac;
+    int8_t *qscale_table;
 
     /* DC predictors management */
     VP56RefDc *above_blocks;
     VP56RefDc left_block[4];
     int above_block_idx[6];
-    int16_t prev_dc[3][3];    /* [plan][ref_frame] */
+    DCTELEM prev_dc[3][3];    /* [plan][ref_frame] */
 
     /* blocks / macroblock */
     VP56mb mb_type;
     VP56Macroblock *macroblocks;
-    DECLARE_ALIGNED(16, int16_t, block_coeff)[6][64];
+    DECLARE_ALIGNED(16, DCTELEM, block_coeff)[6][64];
 
     /* motion vectors */
     VP56mv mv[6];  /* vectors for each block in MB */
@@ -180,7 +147,7 @@ struct vp56_context {
     int flip;  /* are we flipping ? */
     int frbi;  /* first row block index in MB */
     int srbi;  /* second row block index in MB */
-    ptrdiff_t stride[4];  /* stride for each plan */
+    int stride[4];  /* stride for each plan */
 
     const uint8_t *vp56_coord_div;
     VP56ParseVectorAdjustment parse_vector_adjustment;
@@ -191,11 +158,8 @@ struct vp56_context {
     VP56ParseCoeffModels parse_coeff_models;
     VP56ParseHeader parse_header;
 
-    /* for "slice" parallelism between YUV and A */
-    VP56Context *alpha_context;
-
     VP56Model *modelp;
-    VP56Model model;
+    VP56Model models[2];
 
     /* huffman decoding */
     int use_huffman;
@@ -204,113 +168,90 @@ struct vp56_context {
     VLC runv_vlc[2];
     VLC ract_vlc[2][3][6];
     unsigned int nb_null[2][2];       /* number of consecutive NULL DC/AC */
-
-    int have_undamaged_frame;
-    int discard_frame;
 };
 
 
-int ff_vp56_init(AVCodecContext *avctx, int flip, int has_alpha);
-int ff_vp56_init_context(AVCodecContext *avctx, VP56Context *s,
-                          int flip, int has_alpha);
-int ff_vp56_free(AVCodecContext *avctx);
-int ff_vp56_free_context(VP56Context *s);
-void ff_vp56_init_dequant(VP56Context *s, int quantizer);
-int ff_vp56_decode_frame(AVCodecContext *avctx, void *data, int *got_frame,
-                         AVPacket *avpkt);
+void vp56_init(AVCodecContext *avctx, int flip, int has_alpha);
+int vp56_free(AVCodecContext *avctx);
+void vp56_init_dequant(VP56Context *s, int quantizer);
+int vp56_decode_frame(AVCodecContext *avctx, void *data, int *data_size,
+                      AVPacket *avpkt);
 
 
 /**
  * vp56 specific range coder implementation
  */
 
-extern const uint8_t ff_vp56_norm_shift[256];
-int ff_vp56_init_range_decoder(VP56RangeCoder *c, const uint8_t *buf, int buf_size);
-
-static av_always_inline unsigned int vp56_rac_renorm(VP56RangeCoder *c)
+static inline void vp56_init_range_decoder(VP56RangeCoder *c,
+                                           const uint8_t *buf, int buf_size)
 {
-    int shift = ff_vp56_norm_shift[c->high];
-    int bits = c->bits;
-    unsigned int code_word = c->code_word;
+    c->high = 255;
+    c->bits = -8;
+    c->buffer = buf;
+    c->end = buf + buf_size;
+    c->code_word = bytestream_get_be16(&c->buffer);
+}
 
+static inline int vp56_rac_get_prob(VP56RangeCoder *c, uint8_t prob)
+{
+    /* Don't put c->high in a local variable; if we do that, gcc gets
+     * the stupids and turns the code below into a branch again. */
+    int bits = c->bits;
+    unsigned long code_word = c->code_word;
+    unsigned int low = 1 + (((c->high - 1) * prob) >> 8);
+    unsigned int low_shift = low << 8;
+    int bit = code_word >= low_shift;
+    int shift;
+
+    /* Incantation to convince GCC to turn these into conditional moves
+     * instead of branches -- faster, as this branch is basically
+     * unpredictable. */
+    c->high = bit ? c->high - low : low;
+    code_word = bit ? code_word - low_shift : code_word;
+
+    /* normalize */
+    shift = ff_h264_norm_shift[c->high] - 1;
     c->high   <<= shift;
     code_word <<= shift;
     bits       += shift;
     if(bits >= 0 && c->buffer < c->end) {
-        code_word |= bytestream_get_be16(&c->buffer) << bits;
-        bits -= 16;
+        code_word |= *c->buffer++ << bits;
+        bits -= 8;
     }
     c->bits = bits;
-    return code_word;
-}
-
-#if   ARCH_ARM
-#include "arm/vp56_arith.h"
-#elif ARCH_X86
-#include "x86/vp56_arith.h"
-#endif
-
-#ifndef vp56_rac_get_prob
-#define vp56_rac_get_prob vp56_rac_get_prob
-static av_always_inline int vp56_rac_get_prob(VP56RangeCoder *c, uint8_t prob)
-{
-    unsigned int code_word = vp56_rac_renorm(c);
-    unsigned int low = 1 + (((c->high - 1) * prob) >> 8);
-    unsigned int low_shift = low << 16;
-    int bit = code_word >= low_shift;
-
-    c->high = bit ? c->high - low : low;
-    c->code_word = bit ? code_word - low_shift : code_word;
-
+    c->code_word = code_word;
     return bit;
 }
-#endif
 
-#ifndef vp56_rac_get_prob_branchy
-// branchy variant, to be used where there's a branch based on the bit decoded
-static av_always_inline int vp56_rac_get_prob_branchy(VP56RangeCoder *c, int prob)
+static inline int vp56_rac_get(VP56RangeCoder *c)
 {
-    unsigned long code_word = vp56_rac_renorm(c);
-    unsigned low = 1 + (((c->high - 1) * prob) >> 8);
-    unsigned low_shift = low << 16;
-
-    if (code_word >= low_shift) {
-        c->high     -= low;
-        c->code_word = code_word - low_shift;
-        return 1;
-    }
-
-    c->high = low;
-    c->code_word = code_word;
-    return 0;
-}
-#endif
-
-static av_always_inline int vp56_rac_get(VP56RangeCoder *c)
-{
-    unsigned int code_word = vp56_rac_renorm(c);
     /* equiprobable */
     int low = (c->high + 1) >> 1;
-    unsigned int low_shift = low << 16;
-    int bit = code_word >= low_shift;
+    unsigned int low_shift = low << 8;
+    int bit = c->code_word >= low_shift;
     if (bit) {
-        c->high   -= low;
-        code_word -= low_shift;
+        c->high = (c->high - low) << 1;
+        c->code_word -= low_shift;
     } else {
-        c->high = low;
+        c->high = low << 1;
     }
 
-    c->code_word = code_word;
+    /* normalize */
+    c->code_word <<= 1;
+    if (++c->bits == 0 && c->buffer < c->end) {
+        c->bits = -8;
+        c->code_word |= *c->buffer++;
+    }
     return bit;
 }
 
 // rounding is different than vp56_rac_get, is vp56_rac_get wrong?
-static av_always_inline int vp8_rac_get(VP56RangeCoder *c)
+static inline int vp8_rac_get(VP56RangeCoder *c)
 {
     return vp56_rac_get_prob(c, 128);
 }
 
-static int vp56_rac_gets(VP56RangeCoder *c, int bits)
+static inline int vp56_rac_gets(VP56RangeCoder *c, int bits)
 {
     int value = 0;
 
@@ -321,7 +262,7 @@ static int vp56_rac_gets(VP56RangeCoder *c, int bits)
     return value;
 }
 
-static int vp8_rac_get_uint(VP56RangeCoder *c, int bits)
+static inline int vp8_rac_get_uint(VP56RangeCoder *c, int bits)
 {
     int value = 0;
 
@@ -333,7 +274,7 @@ static int vp8_rac_get_uint(VP56RangeCoder *c, int bits)
 }
 
 // fixme: add 1 bit to all the calls to this?
-static av_unused int vp8_rac_get_sint(VP56RangeCoder *c, int bits)
+static inline int vp8_rac_get_sint(VP56RangeCoder *c, int bits)
 {
     int v;
 
@@ -349,25 +290,24 @@ static av_unused int vp8_rac_get_sint(VP56RangeCoder *c, int bits)
 }
 
 // P(7)
-static av_unused int vp56_rac_gets_nn(VP56RangeCoder *c, int bits)
+static inline int vp56_rac_gets_nn(VP56RangeCoder *c, int bits)
 {
     int v = vp56_rac_gets(c, 7) << 1;
     return v + !v;
 }
 
-static av_unused int vp8_rac_get_nn(VP56RangeCoder *c)
+static inline int vp8_rac_get_nn(VP56RangeCoder *c)
 {
     int v = vp8_rac_get_uint(c, 7) << 1;
     return v + !v;
 }
 
-static av_always_inline
-int vp56_rac_get_tree(VP56RangeCoder *c,
-                      const VP56Tree *tree,
-                      const uint8_t *probs)
+static inline int vp56_rac_get_tree(VP56RangeCoder *c,
+                                    const VP56Tree *tree,
+                                    const uint8_t *probs)
 {
     while (tree->val > 0) {
-        if (vp56_rac_get_prob_branchy(c, probs[tree->prob_idx]))
+        if (vp56_rac_get_prob(c, probs[tree->prob_idx]))
             tree += tree->val;
         else
             tree++;
@@ -375,13 +315,14 @@ int vp56_rac_get_tree(VP56RangeCoder *c,
     return -tree->val;
 }
 
-// how probabilities are associated with decisions is different I think
-// well, the new scheme fits in the old but this way has one fewer branches per decision
-static av_always_inline int vp8_rac_get_tree(VP56RangeCoder *c, const int8_t (*tree)[2],
-                                   const uint8_t *probs)
+/**
+ * This is identical to vp8_rac_get_tree except for the possibility of starting
+ * on a node other than the root node, needed for coeff decode where this is
+ * used to save a bit after a 0 token (by disallowing EOB to immediately follow.)
+ */
+static inline int vp8_rac_get_tree_with_offset(VP56RangeCoder *c, const int8_t (*tree)[2],
+                                               const uint8_t *probs, int i)
 {
-    int i = 0;
-
     do {
         i = tree[i][vp56_rac_get_prob(c, probs[i])];
     } while (i > 0);
@@ -389,8 +330,16 @@ static av_always_inline int vp8_rac_get_tree(VP56RangeCoder *c, const int8_t (*t
     return -i;
 }
 
+// how probabilities are associated with decisions is different I think
+// well, the new scheme fits in the old but this way has one fewer branches per decision
+static inline int vp8_rac_get_tree(VP56RangeCoder *c, const int8_t (*tree)[2],
+                                   const uint8_t *probs)
+{
+    return vp8_rac_get_tree_with_offset(c, tree, probs, 0);
+}
+
 // DCTextra
-static av_always_inline int vp8_rac_get_coeff(VP56RangeCoder *c, const uint8_t *prob)
+static inline int vp8_rac_get_coeff(VP56RangeCoder *c, const uint8_t *prob)
 {
     int v = 0;
 

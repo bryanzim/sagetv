@@ -30,18 +30,19 @@
 #define AVCODEC_MPC_H
 
 #include "libavutil/lfg.h"
-
 #include "avcodec.h"
-#include "bswapdsp.h"
+#include "get_bits.h"
+#include "dsputil.h"
 #include "mpegaudio.h"
-#include "mpegaudiodsp.h"
+
+#include "mpcdata.h"
 
 #define BANDS            32
 #define SAMPLES_PER_BAND 36
 #define MPC_FRAME_SIZE   (BANDS * SAMPLES_PER_BAND)
 
 /** Subband structure - hold all variables for each subband */
-typedef struct Band {
+typedef struct {
     int msf; ///< mid-stereo flag
     int res[2];
     int scfi[2];
@@ -49,9 +50,9 @@ typedef struct Band {
     int Q[2];
 }Band;
 
-typedef struct MPCContext {
-    BswapDSPContext bdsp;
-    MPADSPContext mpadsp;
+typedef struct {
+    DSPContext dsp;
+    GetBitContext gb;
     int IS, MSS, gapless;
     int lastframelen;
     int maxbands, last_max_band;
@@ -71,6 +72,6 @@ typedef struct MPCContext {
 } MPCContext;
 
 void ff_mpc_init(void);
-void ff_mpc_dequantize_and_synth(MPCContext *c, int maxband, int16_t **out, int channels);
+void ff_mpc_dequantize_and_synth(MPCContext *c, int maxband, void *dst);
 
 #endif /* AVCODEC_MPC_H */

@@ -26,7 +26,7 @@
 #include "libavutil/fifo.h"
 #include "avformat.h"
 
-typedef struct AudioInterleaveContext {
+typedef struct {
     AVFifoBuffer *fifo;
     unsigned fifo_size;           ///< size of currently allocated FIFO
     uint64_t dts;                 ///< current dts
@@ -39,6 +39,7 @@ typedef struct AudioInterleaveContext {
 int ff_audio_interleave_init(AVFormatContext *s, const int *samples_per_frame, AVRational time_base);
 void ff_audio_interleave_close(AVFormatContext *s);
 
+int ff_interleave_compare_dts(AVFormatContext *s, AVPacket *next, AVPacket *pkt);
 /**
  * Rechunk audio PCM packets per AudioInterleaveContext->samples_per_frame
  * and interleave them correctly.

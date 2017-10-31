@@ -29,14 +29,14 @@
 
 #define RAND_TAG MKBETAG('R','a','n','d')
 
-typedef struct FilmstripMuxContext {
+typedef struct {
     int nb_frames;
 } FilmstripMuxContext;
 
 static int write_header(AVFormatContext *s)
 {
-    if (s->streams[0]->codecpar->format != AV_PIX_FMT_RGBA) {
-        av_log(s, AV_LOG_ERROR, "only AV_PIX_FMT_RGBA is supported\n");
+    if (s->streams[0]->codec->pix_fmt != PIX_FMT_RGBA) {
+        av_log(s, AV_LOG_ERROR, "only PIX_FMT_RGBA is supported\n");
         return AVERROR_INVALIDDATA;
     }
     return 0;
@@ -45,7 +45,7 @@ static int write_header(AVFormatContext *s)
 static int write_packet(AVFormatContext *s, AVPacket *pkt)
 {
     FilmstripMuxContext *film = s->priv_data;
-    avio_write(s->pb, pkt->data, pkt->size);
+    put_buffer(s->pb, pkt->data, pkt->size);
     film->nb_frames++;
     return 0;
 }
@@ -53,33 +53,33 @@ static int write_packet(AVFormatContext *s, AVPacket *pkt)
 static int write_trailer(AVFormatContext *s)
 {
     FilmstripMuxContext *film = s->priv_data;
-    AVIOContext *pb = s->pb;
+    ByteIOContext *pb = s->pb;
     AVStream *st = s->streams[0];
     int i;
 
-    avio_wb32(pb, RAND_TAG);
-    avio_wb32(pb, film->nb_frames);
-    avio_wb16(pb, 0);  // packing method
-    avio_wb16(pb, 0);  // reserved
-    avio_wb16(pb, st->codecpar->width);
-    avio_wb16(pb, st->codecpar->height);
-    avio_wb16(pb, 0);  // leading
-    // TODO: should be avg_frame_rate
-    avio_wb16(pb, st->time_base.den / st->time_base.num);
+    put_be32(pb, RAND_TAG);
+    put_be32(pb, film->nb_frames);
+    put_be16(pb, 0);  // packing method
+    put_be16(pb, 0);  // reserved
+    put_be16(pb, st->codec->width);
+    put_be16(pb, st->codec->height);
+    put_be16(pb, 0);  // leading
+    put_be16(pb, 1/av_q2d(st->codec->time_base));
     for (i = 0; i < 16; i++)
-        avio_w8(pb, 0x00);  // reserved
-
+        put_byte(pb, 0x00);  // reserved
+    put_flush_packet(pb);
     return 0;
 }
 
-AVOutputFormat ff_filmstrip_muxer = {
-    .name              = "filmstrip",
-    .long_name         = NULL_IF_CONFIG_SMALL("Adobe Filmstrip"),
-    .extensions        = "flm",
-    .priv_data_size    = sizeof(FilmstripMuxContext),
-    .audio_codec       = AV_CODEC_ID_NONE,
-    .video_codec       = AV_CODEC_ID_RAWVIDEO,
-    .write_header      = write_header,
-    .write_packet      = write_packet,
-    .write_trailer     = write_trailer,
+AVOutputFormat filmstrip_muxer = {
+    "filmstrip",
+    NULL_IF_CONFIG_SMALL("Adobe Filmstrip"),
+    NULL,
+    "flm",
+    sizeof(FilmstripMuxContext),
+    CODEC_ID_NONE,
+    CODEC_ID_RAWVIDEO,
+    write_header,
+    write_packet,
+    write_trailer,
 };

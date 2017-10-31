@@ -26,13 +26,11 @@
 #ifndef AVUTIL_EVAL_H
 #define AVUTIL_EVAL_H
 
-#include "avutil.h"
-
 typedef struct AVExpr AVExpr;
 
 /**
  * Parse and evaluate an expression.
- * Note, this is significantly slower than av_expr_eval().
+ * Note, this is significantly slower than av_eval_expr().
  *
  * @param res a pointer to a double where is put the result value of
  * the expression, or NAN in case of error
@@ -45,10 +43,10 @@ typedef struct AVExpr AVExpr;
  * @param funcs2 NULL terminated array of function pointers for functions which take 2 arguments
  * @param opaque a pointer which will be passed to all functions from funcs1 and funcs2
  * @param log_ctx parent logging context
- * @return >= 0 in case of success, a negative value corresponding to an
+ * @return 0 in case of success, a negative value corresponding to an
  * AVERROR code otherwise
  */
-int av_expr_parse_and_eval(double *res, const char *s,
+int av_parse_and_eval_expr(double *res, const char *s,
                            const char * const *const_names, const double *const_values,
                            const char * const *func1_names, double (* const *funcs1)(void *, double),
                            const char * const *func2_names, double (* const *funcs2)(void *, double, double),
@@ -58,8 +56,8 @@ int av_expr_parse_and_eval(double *res, const char *s,
  * Parse an expression.
  *
  * @param expr a pointer where is put an AVExpr containing the parsed
- * value in case of successful parsing, or NULL otherwise.
- * The pointed to AVExpr must be freed with av_expr_free() by the user
+ * value in case of successfull parsing, or NULL otherwise.
+ * The pointed to AVExpr must be freed with av_free_expr() by the user
  * when it is not needed anymore.
  * @param s expression as a zero terminated string, for example "1+2^3+5*5+sin(2/3)"
  * @param const_names NULL terminated array of zero terminated strings of constant identifiers, for example {"PI", "E", 0}
@@ -68,10 +66,10 @@ int av_expr_parse_and_eval(double *res, const char *s,
  * @param func2_names NULL terminated array of zero terminated strings of funcs2 identifiers
  * @param funcs2 NULL terminated array of function pointers for functions which take 2 arguments
  * @param log_ctx parent logging context
- * @return >= 0 in case of success, a negative value corresponding to an
+ * @return 0 in case of success, a negative value corresponding to an
  * AVERROR code otherwise
  */
-int av_expr_parse(AVExpr **expr, const char *s,
+int av_parse_expr(AVExpr **expr, const char *s,
                   const char * const *const_names,
                   const char * const *func1_names, double (* const *funcs1)(void *, double),
                   const char * const *func2_names, double (* const *funcs2)(void *, double, double),
@@ -80,16 +78,16 @@ int av_expr_parse(AVExpr **expr, const char *s,
 /**
  * Evaluate a previously parsed expression.
  *
- * @param const_values a zero terminated array of values for the identifiers from av_expr_parse() const_names
+ * @param const_values a zero terminated array of values for the identifiers from av_parse_expr() const_names
  * @param opaque a pointer which will be passed to all functions from funcs1 and funcs2
  * @return the value of the expression
  */
-double av_expr_eval(AVExpr *e, const double *const_values, void *opaque);
+double av_eval_expr(AVExpr *e, const double *const_values, void *opaque);
 
 /**
- * Free a parsed expression previously created with av_expr_parse().
+ * Free a parsed expression previously created with av_parse_expr().
  */
-void av_expr_free(AVExpr *e);
+void av_free_expr(AVExpr *e);
 
 /**
  * Parse the string in numstr and return its value as a double. If
@@ -102,7 +100,7 @@ void av_expr_free(AVExpr *e);
  * @param numstr a string representing a number, may contain one of
  * the International System number postfixes, for example 'K', 'M',
  * 'G'. If 'i' is appended after the postfix, powers of 2 are used
- * instead of powers of 10. The 'B' postfix multiplies the value by
+ * instead of powers of 10. The 'B' postfix multiplies the value for
  * 8, and can be appended after another postfix or used alone. This
  * allows using for example 'KB', 'MiB', 'G' and 'B' as postfix.
  * @param tail if non-NULL puts here the pointer to the char next

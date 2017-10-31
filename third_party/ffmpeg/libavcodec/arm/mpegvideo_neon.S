@@ -18,13 +18,14 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "libavutil/arm/asm.S"
+#include "asm.S"
 #include "asm-offsets.h"
 
 function ff_dct_unquantize_h263_inter_neon, export=1
-        add             r12, r0,  #BLOCK_LAST_INDEX
+        add             r0,  r0,  #0x2200
+        add             r12, r0,  #BLOCK_LAST_INDEX-0x2200
         ldr             r12, [r12, r2, lsl #2]
-        add             r0,  r0,  #INTER_SCANTAB_RASTER_END
+        add             r0,  r0,  #INTER_SCANTAB_RASTER_END-0x2200
         ldrb            r12, [r0, r12]
         sub             r2,  r3,  #1
         lsl             r0,  r3,  #1
@@ -57,7 +58,6 @@ function ff_dct_unquantize_h263_neon, export=1
         subs            r3,  r3,  #16
         vst1.16         {q0},     [r1,:128]!
         vst1.16         {q8},     [r1,:128]!
-        it              le
         bxle            lr
         cmp             r3,  #8
         bgt             1b
@@ -75,24 +75,23 @@ endfunc
 
 function ff_dct_unquantize_h263_intra_neon, export=1
         push            {r4-r6,lr}
-        add             r12, r0,  #BLOCK_LAST_INDEX
         ldr             r6,  [r0, #AC_PRED]
-        add             lr,  r0,  #INTER_SCANTAB_RASTER_END
+        add             r5,  r0,  #0x2700
         cmp             r6,  #0
-        it              ne
         movne           r12, #63
         bne             1f
+        add             lr,  r0,  #0x2200
+        add             r12, lr,  #BLOCK_LAST_INDEX-0x2200
+        add             lr,  lr,  #INTER_SCANTAB_RASTER_END-0x2200
         ldr             r12, [r12, r2, lsl #2]
         ldrb            r12, [lr, r12]
-1:      ldr             r5,  [r0, #H263_AIC]
+1:      ldr             r5,  [r5, #H263_AIC-0x2700]
         ldrsh           r4,  [r1]
         cmp             r5,  #0
         mov             r5,  r1
-        it              ne
         movne           r2,  #0
         bne             2f
         cmp             r2,  #4
-        it              ge
         addge           r0,  r0,  #4
         sub             r2,  r3,  #1
         ldr             r6,  [r0, #Y_DC_SCALE]
@@ -100,7 +99,7 @@ function ff_dct_unquantize_h263_intra_neon, export=1
         smulbb          r4,  r4,  r6
 2:      lsl             r0,  r3,  #1
         add             r3,  r12, #1
-        bl              X(ff_dct_unquantize_h263_neon)
+        bl              ff_dct_unquantize_h263_neon
         vmov.16         d0[0], r4
         vst1.16         {d0[0]},  [r5]
         pop             {r4-r6,pc}

@@ -29,16 +29,23 @@
 
 
 #include "avformat.h"
-#include "libavutil/dict.h"
 
-typedef struct AVMetadataConv {
+struct AVMetadata{
+    int count;
+    AVMetadataTag *elems;
+};
+
+struct AVMetadataConv{
     const char *native;
     const char *generic;
-} AVMetadataConv;
+};
 
-void ff_metadata_conv(AVDictionary **pm, const AVMetadataConv *d_conv,
-                                       const AVMetadataConv *s_conv);
-void ff_metadata_conv_ctx(AVFormatContext *ctx, const AVMetadataConv *d_conv,
-                                                const AVMetadataConv *s_conv);
+#if LIBAVFORMAT_VERSION_MAJOR < 53
+void ff_metadata_demux_compat(AVFormatContext *s);
+void ff_metadata_mux_compat(AVFormatContext *s);
+#endif
+
+void metadata_conv(AVMetadata **pm, const AVMetadataConv *d_conv,
+                                    const AVMetadataConv *s_conv);
 
 #endif /* AVFORMAT_METADATA_H */

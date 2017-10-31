@@ -28,43 +28,55 @@
 
 #if HAVE_INLINE_ASM
 
-#if HAVE_ARMV6_INLINE
+#   define MULL MULL
+static inline av_const int MULL(int a, int b, unsigned shift)
+{
+    int lo, hi;
+    __asm__("smull %0, %1, %2, %3     \n\t"
+            "mov   %0, %0,     lsr %4 \n\t"
+            "add   %1, %0, %1, lsl %5 \n\t"
+            : "=&r"(lo), "=&r"(hi)
+            : "r"(b), "r"(a), "ir"(shift), "ir"(32-shift));
+    return hi;
+}
+
 #define MULH MULH
+#if HAVE_ARMV6
 static inline av_const int MULH(int a, int b)
 {
     int r;
     __asm__ ("smmul %0, %1, %2" : "=r"(r) : "r"(a), "r"(b));
     return r;
 }
-
-#define FASTDIV FASTDIV
-static av_always_inline av_const int FASTDIV(int a, int b)
+#else
+static inline av_const int MULH(int a, int b)
 {
-    int r;
-    __asm__ ("cmp     %2, #2               \n\t"
-             "ldr     %0, [%3, %2, lsl #2] \n\t"
-             "ite     le                   \n\t"
-             "lsrle   %0, %1, #1           \n\t"
-             "smmulgt %0, %0, %1           \n\t"
-             : "=&r"(r) : "r"(a), "r"(b), "r"(ff_inverse) : "cc");
-    return r;
-}
-
-#else /* HAVE_ARMV6_INLINE */
-
-#define FASTDIV FASTDIV
-static av_always_inline av_const int FASTDIV(int a, int b)
-{
-    int r, t;
-    __asm__ ("umull %1, %0, %2, %3"
-             : "=&r"(r), "=&r"(t) : "r"(a), "r"(ff_inverse[b]));
-    return r;
+    int lo, hi;
+    __asm__ ("smull %0, %1, %2, %3" : "=&r"(lo), "=&r"(hi) : "r"(b), "r"(a));
+    return hi;
 }
 #endif
 
+static inline av_const int64_t MUL64(int a, int b)
+{
+    union { uint64_t x; unsigned hl[2]; } x;
+    __asm__ ("smull %0, %1, %2, %3"
+             : "=r"(x.hl[0]), "=r"(x.hl[1]) : "r"(a), "r"(b));
+    return x.x;
+}
+#define MUL64 MUL64
+
+static inline av_const int64_t MAC64(int64_t d, int a, int b)
+{
+    union { uint64_t x; unsigned hl[2]; } x = { d };
+    __asm__ ("smlal %0, %1, %2, %3"
+             : "+r"(x.hl[0]), "+r"(x.hl[1]) : "r"(a), "r"(b));
+    return x.x;
+}
+#define MAC64(d, a, b) ((d) = MAC64(d, a, b))
 #define MLS64(d, a, b) MAC64(d, -(a), b)
 
-#if HAVE_ARMV5TE_INLINE
+#if HAVE_ARMV5TE
 
 /* signed 16x16 -> 32 multiply add accumulate */
 #   define MAC16(rt, ra, rb)                                            \
@@ -85,21 +97,17 @@ static inline av_const int MUL16(int ra, int rb)
 static inline av_const int mid_pred(int a, int b, int c)
 {
     int m;
-    __asm__ (
+    __asm__ volatile (
         "mov   %0, %2  \n\t"
         "cmp   %1, %2  \n\t"
-        "itt   gt      \n\t"
         "movgt %0, %1  \n\t"
         "movgt %1, %2  \n\t"
         "cmp   %1, %3  \n\t"
-        "it    le      \n\t"
         "movle %1, %3  \n\t"
         "cmp   %0, %1  \n\t"
-        "it    gt      \n\t"
         "movgt %0, %1  \n\t"
         : "=&r"(m), "+r"(a)
-        : "r"(b), "r"(c)
-        : "cc");
+        : "r"(b), "r"(c));
     return m;
 }
 

@@ -16,18 +16,15 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "libavutil/attributes.h"
 #include "libavutil/mem.h"
 #include "avfft.h"
 #include "fft.h"
-#include "rdft.h"
-#include "dct.h"
 
 /* FFT */
 
 FFTContext *av_fft_init(int nbits, int inverse)
 {
-    FFTContext *s = av_mallocz(sizeof(*s));
+    FFTContext *s = av_malloc(sizeof(*s));
 
     if (s && ff_fft_init(s, nbits, inverse))
         av_freep(&s);
@@ -45,7 +42,7 @@ void av_fft_calc(FFTContext *s, FFTComplex *z)
     s->fft_calc(s, z);
 }
 
-av_cold void av_fft_end(FFTContext *s)
+void av_fft_end(FFTContext *s)
 {
     if (s) {
         ff_fft_end(s);
@@ -80,7 +77,7 @@ void av_mdct_calc(FFTContext *s, FFTSample *output, const FFTSample *input)
     s->mdct_calc(s, output, input);
 }
 
-av_cold void av_mdct_end(FFTContext *s)
+void av_mdct_end(FFTContext *s)
 {
     if (s) {
         ff_mdct_end(s);
@@ -104,10 +101,10 @@ RDFTContext *av_rdft_init(int nbits, enum RDFTransformType trans)
 
 void av_rdft_calc(RDFTContext *s, FFTSample *data)
 {
-    s->rdft_calc(s, data);
+    ff_rdft_calc(s, data);
 }
 
-av_cold void av_rdft_end(RDFTContext *s)
+void av_rdft_end(RDFTContext *s)
 {
     if (s) {
         ff_rdft_end(s);
@@ -131,10 +128,10 @@ DCTContext *av_dct_init(int nbits, enum DCTTransformType inverse)
 
 void av_dct_calc(DCTContext *s, FFTSample *data)
 {
-    s->dct_calc(s, data);
+    ff_dct_calc(s, data);
 }
 
-av_cold void av_dct_end(DCTContext *s)
+void av_dct_end(DCTContext *s)
 {
     if (s) {
         ff_dct_end(s);

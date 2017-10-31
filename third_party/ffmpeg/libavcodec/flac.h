@@ -28,20 +28,17 @@
 #define AVCODEC_FLAC_H
 
 #include "avcodec.h"
-#include "bytestream.h"
-#include "get_bits.h"
 
 #define FLAC_STREAMINFO_SIZE   34
 #define FLAC_MAX_CHANNELS       8
 #define FLAC_MIN_BLOCKSIZE     16
 #define FLAC_MAX_BLOCKSIZE  65535
-#define FLAC_MIN_FRAME_SIZE    11
 
 enum {
-    FLAC_CHMODE_INDEPENDENT = 0,
-    FLAC_CHMODE_LEFT_SIDE   = 1,
-    FLAC_CHMODE_RIGHT_SIDE  = 2,
-    FLAC_CHMODE_MID_SIDE    = 3,
+    FLAC_CHMODE_INDEPENDENT =  0,
+    FLAC_CHMODE_LEFT_SIDE   =  8,
+    FLAC_CHMODE_RIGHT_SIDE  =  9,
+    FLAC_CHMODE_MID_SIDE    = 10,
 };
 
 enum {
@@ -83,11 +80,6 @@ typedef struct FLACFrameInfo {
     FLACCOMMONINFO
     int blocksize;          /**< block size of the frame                 */
     int ch_mode;            /**< channel decorrelation mode              */
-    int64_t frame_or_sample_num;    /**< frame number or sample number   */
-    int is_var_size;                /**< specifies if the stream uses variable
-                                         block sizes or a fixed block size;
-                                         also determines the meaning of
-                                         frame_or_sample_num             */
 } FLACFrameInfo;
 
 /**
@@ -95,10 +87,8 @@ typedef struct FLACFrameInfo {
  * @param[out] avctx   codec context to set basic stream parameters
  * @param[out] s       where parsed information is stored
  * @param[in]  buffer  pointer to start of 34-byte streaminfo data
- *
- * @return negative error code on faiure or >= 0 on success
  */
-int ff_flac_parse_streaminfo(AVCodecContext *avctx, struct FLACStreaminfo *s,
+void ff_flac_parse_streaminfo(AVCodecContext *avctx, struct FLACStreaminfo *s,
                               const uint8_t *buffer);
 
 /**
@@ -113,43 +103,21 @@ int ff_flac_is_extradata_valid(AVCodecContext *avctx,
                                uint8_t **streaminfo_start);
 
 /**
- * Calculate an estimate for the maximum frame size based on verbatim mode.
- * @param blocksize block size, in samples
- * @param ch number of channels
- * @param bps bits-per-sample
- */
-int ff_flac_get_max_frame_size(int blocksize, int ch, int bps);
-
-/**
- * Validate and decode a frame header.
- * @param      avctx AVCodecContext to use as av_log() context
- * @param      gb    GetBitContext from which to read frame header
- * @param[out] fi    frame information
- * @param      log_level_offset  log level offset. can be used to silence error messages.
- * @return non-zero on error, 0 if ok
- */
-int ff_flac_decode_frame_header(AVCodecContext *avctx, GetBitContext *gb,
-                                FLACFrameInfo *fi, int log_level_offset);
-
-void ff_flac_set_channel_layout(AVCodecContext *avctx);
-
-/**
  * Parse the metadata block parameters from the header.
  * @param[in]  block_header header data, at least 4 bytes
  * @param[out] last indicator for last metadata block
  * @param[out] type metadata block type
  * @param[out] size metadata block size
  */
-static av_always_inline void flac_parse_block_header(const uint8_t *block_header,
-                                                      int *last, int *type, int *size)
-{
-    int tmp = bytestream_get_byte(&block_header);
-    if (last)
-        *last = tmp & 0x80;
-    if (type)
-        *type = tmp & 0x7F;
-    if (size)
-        *size = bytestream_get_be24(&block_header);
-}
+void ff_flac_parse_block_header(const uint8_t *block_header,
+                                int *last, int *type, int *size);
+
+/**
+ * Calculate an estimate for the maximum frame size based on verbatim mode.
+ * @param blocksize block size, in samples
+ * @param ch number of channels
+ * @param bps bits-per-sample
+ */
+int ff_flac_get_max_frame_size(int blocksize, int ch, int bps);
 
 #endif /* AVCODEC_FLAC_H */

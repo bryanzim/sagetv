@@ -18,7 +18,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "libavutil/arm/asm.S"
+#include "asm.S"
 
         .macro ldcol.8  rd,  rs,  rt,  n=8,  hi=0
 .if \n == 8 || \hi == 0
@@ -131,8 +131,8 @@ function ff_pred16x16_plane_neon, export=1
         vadd.i16        d5,  d6,  d7
         vpadd.i16       d4,  d4,  d5
         vpadd.i16       d4,  d4,  d4
-        vshll.s16       q3,  d4,  #2
-        vaddw.s16       q2,  q3,  d4
+        vshl.i16        d5,  d4,  #2
+        vaddl.s16       q2,  d4,  d5
         vrshrn.s32      d4,  q2,  #6
         mov             r3,  #0
         vtrn.16         d4,  d5
@@ -166,9 +166,12 @@ function ff_pred16x16_plane_neon, export=1
         bx              lr
 endfunc
 
-const   p16weight, align=4
+        .section        .rodata
+        .align          4
+p16weight:
         .short          1,2,3,4,5,6,7,8
-endconst
+
+        .text
 
 function ff_pred8x8_hor_neon, export=1
         sub             r2,  r0,  #1

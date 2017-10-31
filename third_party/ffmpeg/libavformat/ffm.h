@@ -28,7 +28,6 @@
 
 /* The FFM file is made of blocks of fixed size */
 #define FFM_HEADER_SIZE 14
-#define FFM_PACKET_SIZE 4096
 #define PACKET_ID       0x666d
 
 /* each packet contains frames (which can span several packets */
@@ -42,7 +41,6 @@ enum {
 };
 
 typedef struct FFMContext {
-    const AVClass *class;
     /* only reading mode */
     int64_t write_index, file_size;
     int read_state;
@@ -55,8 +53,6 @@ typedef struct FFMContext {
     int64_t dts;
     uint8_t *packet_ptr, *packet_end;
     uint8_t packet[FFM_PACKET_SIZE];
-    int64_t start_time;
-    int server_attached;
 } FFMContext;
 
 #endif /* AVFORMAT_FFM_H */
