@@ -62,7 +62,7 @@ CFilterProperties::~CFilterProperties()
 {
 }
 
-BOOL CFilterProperties::OnReceiveMessage( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam )
+INT_PTR CFilterProperties::OnReceiveMessage( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam )
 {
     switch(uMsg)
     {

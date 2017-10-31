@@ -16,7 +16,9 @@
 
 #pragma warning(disable : 4996)
 
+#ifndef _WIN64
 #define _USE_32BIT_TIME_T
+#endif
 
 #include <windows.h>
 #include <commctrl.h>
@@ -96,7 +98,7 @@ CFilterProperties *g_pCFilterProperties = NULL;
 	g_pCFilterProperties->OnTimer( ct );
 }     
 
-BOOL CFilterProperties::OnReceiveMessage( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam )
+INT_PTR CFilterProperties::OnReceiveMessage( HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam )
 {
 	int checked;
     switch(uMsg)

@@ -199,13 +199,13 @@ public:
                 BOOL bAligned,
 		BYTE* pBuffer,
 		LPVOID pContext,
-		DWORD dwUser);
+		DWORD_PTR dwUser);
 
     // wait for the next read to complete
     HRESULT WaitForNext(
 	    	DWORD dwTimeout,
 		LPVOID *ppContext,
-		DWORD * pdwUser,
+		DWORD_PTR * pdwUser,
                 LONG * pcbActual
                 );
 

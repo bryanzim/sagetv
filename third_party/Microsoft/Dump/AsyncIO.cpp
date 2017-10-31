@@ -11,7 +11,6 @@
 #include "../../../native/include/isharedasync.h"
 #include "AsyncIO.h"
 
-
 CAsyncRequest::CAsyncRequest( DWORD dwBufferSize )
 : m_hr(S_OK),
   m_dwSize(dwBufferSize),

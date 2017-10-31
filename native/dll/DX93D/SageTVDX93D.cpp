@@ -942,14 +942,20 @@ JNIEXPORT void JNICALL Java_sage_DirectX9SageRenderer_cleanupDX9SageRenderer0(JN
 
 // Used for fast byte-swapping to fix endian order issues with byte buffer data
 unsigned long swap(unsigned long ToSwap) {
+#ifndef _WIN64
    __asm
    {
    mov eax,ToSwap
    bswap eax
    mov ToSwap,eax
+   return(ToSwap);
    }
-return(ToSwap);
+#else
+    return ((ToSwap & 0x0F) << 24) | ((ToSwap & 0x0F00) << 8) |
+           ((ToSwap & 0x0F0000) >> 8) | ((ToSwap & 0x0F000000) >> 24);
+#endif
 }
+
 
 // Callback function used to clear a texture to black
 VOID WINAPI ClearToBlack (D3DXVECTOR4* pOut, const D3DXVECTOR2* pTexCoord, 

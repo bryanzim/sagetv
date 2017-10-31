@@ -159,7 +159,7 @@ CAsyncIo::Request(
             BOOL bAligned,
             BYTE* pBuffer,
             LPVOID pContext,
-            DWORD dwUser)
+            DWORD_PTR dwUser)
 {
     if (bAligned) {
         if (!IsAligned(llPos) ||
@@ -197,7 +197,7 @@ HRESULT
 CAsyncIo::WaitForNext(
     DWORD dwTimeout,
     LPVOID *ppContext,
-    DWORD * pdwUser,
+    DWORD_PTR* pdwUser,
     LONG* pcbActual)
 {
     // some errors find a sample, others don't. Ensure that

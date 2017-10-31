@@ -1233,7 +1233,12 @@ void WaitForEvent(JNIEnv* env, IFilterGraph* pGraph, long evtCode)
 	if (WAIT_FOR_COMPLETIONS)
 	{
 		HANDLE  hEvent; 
-		long    evCode, param1, param2;
+        long evCode;
+#ifdef _WIN64
+        long long param1, param2;
+#else
+		long param1, param2;
+#endif
 		BOOLEAN bDone = FALSE;
 		HRESULT hr = S_OK;
 		CComPtr<IMediaEvent> pEvent = NULL;
@@ -1246,7 +1251,7 @@ void WaitForEvent(JNIEnv* env, IFilterGraph* pGraph, long evtCode)
 			{
 				if (WAIT_OBJECT_0 == WaitForSingleObject(hEvent, 500))
 				{ 
-					while (hr = pEvent->GetEvent(&evCode, &param1, &param2, 0), SUCCEEDED(hr)) 
+					while (hr = pEvent->GetEvent(&evCode,(LONG_PTR*) &param1, (LONG_PTR*) &param2, 0), SUCCEEDED(hr))
 					{
 						slog((env, "Event code: %#04x\n Params: %d, %d\r\n", evCode, param1, param2));
 						pEvent->FreeEventParams(evCode, param1, param2);

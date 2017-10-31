@@ -165,7 +165,7 @@ private:
 	HRESULT ReOpenConnection();
 	HRESULT WriteNetwork(PBYTE data, DWORD len);
 	SOCKET  sd;
-	TCHAR   m_pHostname[256];
+	CHAR   m_pHostname[256];
 	DWORD	m_dwUploadKey;
 	BOOL	m_bRemoteFile;
     LONGLONG       m_llPosition;

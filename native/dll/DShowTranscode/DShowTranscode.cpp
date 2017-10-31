@@ -467,7 +467,12 @@ public:
 #endif
 	HRESULT WaitForTranscodeCompletion()
 	{
-		long evCode, param1, param2;
+        long evCode;
+#ifdef _WIN64
+        long long param1, param2;
+#else
+		long param1, param2;
+#endif
 		HRESULT hr;
 		int numStreams = 1; // MS AVI Mux only sends out one, DivX will send out 3
 #define XCODE_COMPLETES_ON_EC_COMPLETE

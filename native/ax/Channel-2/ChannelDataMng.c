@@ -17,7 +17,9 @@
 #ifdef WIN32
 #pragma warning(disable : 4996)
 #pragma warning(disable: 4702)
+#ifndef _WIN64
 #define _USE_32BIT_TIME_T
+#endif
 #endif
 #include <stdlib.h>
 #include <stdio.h>

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef _USE_32BIT_TIME_T
+#ifndef _WIN64
 #define _USE_32BIT_TIME_T
 #endif
 

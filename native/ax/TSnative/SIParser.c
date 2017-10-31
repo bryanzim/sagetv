@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 // Eliminate silly MS compiler security warnings about using POSIX functions
-#define _USE_32BIT_TIME_T 1
+#ifndef _WIN64
+#define _USE_32BIT_TIME_T
+#endif
 #pragma warning(disable : 4996)
 
 #include <stdio.h>

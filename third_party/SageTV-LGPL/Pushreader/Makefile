@@ -7,7 +7,7 @@ WORK=/c/Sage/native/ax/StrmDeMux
 STAGE=/c/sage/buildwin/stage
 STAGE_LIB=$(STAGE)/lib
 STAGE_INC=$(STAGE)/include
-FFMPEG_DIR=/c/sage/ffmpeg
+FFMPEG_DIR=../../ffmpeg
 
 #for test ZQ.
 #FFMPEG_DIR=/C/zq/Projects/ffmpeg

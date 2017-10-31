@@ -1234,7 +1234,12 @@ void WaitForEvent(JNIEnv* env, IFilterGraph* pGraph, long evtCode)
 	if (WAIT_FOR_COMPLETIONS)
 	{
 		HANDLE  hEvent; 
-		long    evCode, param1, param2;
+        long evCode;
+#ifdef _WIN64
+        long long param1, param2;
+#else
+		long param1, param2;
+#endif
 		BOOLEAN bDone = FALSE;
 		HRESULT hr = S_OK;
 		CComPtr<IMediaEvent> pEvent = NULL;

@@ -73,7 +73,7 @@
 // Eliminate silly MS compiler security warnings about using POSIX functions
 #pragma warning(disable : 4996)
 
-#include <windows.h>
+#include <Windows.h>
 #include <commdlg.h>
 #include <streams.h>
 #include <initguid.h>
@@ -137,7 +137,7 @@ static void _flog_check()
 
 class CWtoT
 {
-    LPTSTR m_ptsz;
+    LPSTR m_ptsz;
 
 public:
     CWtoT(LPCWSTR pwsz) : m_ptsz(NULL)
@@ -157,7 +157,7 @@ public:
         free(m_ptsz);
     }
     size_t GetLength() const { return strlen(m_ptsz); }
-    operator LPCTSTR() const { return m_ptsz; }
+    operator LPCSTR() const { return m_ptsz; }
 };
 
 const AMOVIESETUP_MEDIATYPE sudPinTypes =
@@ -751,17 +751,17 @@ CMPEG2Dump::CMPEG2Dump(LPUNKNOWN pUnk, HRESULT *phr) :
 	HKEY myKey;
 	DWORD readType;
 	DWORD hsize = sizeof(holder);
-	if (RegOpenKeyEx(rootKey, "SOFTWARE\\Frey Technologies\\Common\\DSFilters\\MpegMux", 0, KEY_QUERY_VALUE, &myKey) == ERROR_SUCCESS)
+	if (RegOpenKeyEx(rootKey, L"SOFTWARE\\Frey Technologies\\Common\\DSFilters\\MpegMux", 0, KEY_QUERY_VALUE, &myKey) == ERROR_SUCCESS)
 	{
-		if (RegQueryValueEx(myKey, "BoostThreadPriorities", 0, &readType, (LPBYTE) &holder, &hsize) == ERROR_SUCCESS)
+		if (RegQueryValueEx(myKey, L"BoostThreadPriorities", 0, &readType, (LPBYTE) &holder, &hsize) == ERROR_SUCCESS)
 		{
 			m_bRegBoostThreads = (holder == 1);
 		}
-		if (RegQueryValueEx(myKey, "OptimizeNetTransfers", 0, &readType, (LPBYTE) &holder, &hsize) == ERROR_SUCCESS)
+		if (RegQueryValueEx(myKey, L"OptimizeNetTransfers", 0, &readType, (LPBYTE) &holder, &hsize) == ERROR_SUCCESS)
 		{
 			m_bRegOptimizeTransfers = (holder == 1);
 		}
-		if (RegQueryValueEx(myKey, "BufferSize", 0, &readType, (LPBYTE) &holder, &hsize) == ERROR_SUCCESS)
+		if (RegQueryValueEx(myKey, L"BufferSize", 0, &readType, (LPBYTE) &holder, &hsize) == ERROR_SUCCESS)
 		{
 			if ( holder <512 && holder > 0 )
 				dwAysncBufferSize = holder *1024;
@@ -1663,7 +1663,7 @@ HRESULT CMPEG2Dump::OpenConnection()
 	}
 
 	DbgLog((LOG_TRACE, 2, TEXT("connect succeeded")));
-    TCHAR *lpszFileName=0;
+    CHAR *lpszFileName=0;
     int cch = lstrlenW(m_pFileName) + 1;
     lpszFileName = new char[cch * 2];
     if (!lpszFileName) {

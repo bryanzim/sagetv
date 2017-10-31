@@ -887,7 +887,11 @@ JNIEXPORT void JNICALL Java_sage_UIManager_setCursorClip(
 JNIEXPORT jboolean JNICALL Java_sage_UIManager_sendMessage(
 	JNIEnv *env, jclass jc, jlong winID, jint msgID, jint msgData)
 {
-	DWORD msgRes;
+#ifdef _WIN64
+	DWORD_PTR msgRes;
+#else
+    DWORD msgRes;
+#endif
 	if (SendMessageTimeout((HWND) winID, msgID + WM_USER, msgData, msgData,
 		SMTO_ABORTIFHUNG | SMTO_BLOCK, 15000, &msgRes) == 0)
 		return JNI_FALSE;
