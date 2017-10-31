@@ -24,6 +24,12 @@
 #define JOIN(a, b) GLUE(a, b)
 #define X(s) JOIN(EXTERN_ASM, s)
 
+#if __APPLE__
+#define R(n) r ## n
+#else
+#define R(n) n
+#endif
+
 #if ARCH_PPC64
 
 #define PTR  .quad
@@ -36,16 +42,27 @@
 
 .macro extfunc name
     .global X(\name)
+#if _CALL_ELF == 2
+    .text
+X(\name):
+    addis %r2, %r12, .TOC.-X(\name)@ha
+    addi %r2, %r2, .TOC.-X(\name)@l
+    .localentry X(\name), .-X(\name)
+#else
     .section .opd, "aw"
 X(\name):
     .quad L(\name), .TOC.@tocbase, 0
     .previous
     .type X(\name), STT_FUNC
 L(\name):
+#endif
 .endm
 
-.macro movrel rd, sym
-    ld      \rd, \sym@got(r2)
+.macro movrel rd, sym, gp
+    ld      \rd, \sym@got(R(2))
+.endm
+
+.macro get_got rd
 .endm
 
 #else /* ARCH_PPC64 */
@@ -65,12 +82,22 @@ X(\name):
 \name:
 .endm
 
-.macro movrel rd, sym
+.macro movrel rd, sym, gp
 #if CONFIG_PIC
-    lwz     \rd, \sym@got(r2)
+    lwz     \rd, \sym@got(\gp)
 #else
     lis     \rd, \sym@ha
     la      \rd, \sym@l(\rd)
+#endif
+.endm
+
+.macro get_got rd
+#if CONFIG_PIC
+    bcl     20, 31, .Lgot\@
+.Lgot\@:
+    mflr    \rd
+    addis   \rd, \rd, _GLOBAL_OFFSET_TABLE_ - .Lgot\@@ha
+    addi    \rd, \rd, _GLOBAL_OFFSET_TABLE_ - .Lgot\@@l
 #endif
 .endm
 

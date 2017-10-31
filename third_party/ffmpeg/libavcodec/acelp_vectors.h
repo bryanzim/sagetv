@@ -25,8 +25,32 @@
 
 #include <stdint.h>
 
+typedef struct ACELPVContext {
+    /**
+     * float implementation of weighted sum of two vectors.
+     * @param[out] out result of addition
+     * @param in_a first vector
+     * @param in_b second vector
+     * @param weight_coeff_a first vector weight coefficient
+     * @param weight_coeff_a second vector weight coefficient
+     * @param length vectors length (should be a multiple of two)
+     *
+     * @note It is safe to pass the same buffer for out and in_a or in_b.
+     */
+    void (*weighted_vector_sumf)(float *out, const float *in_a, const float *in_b,
+                                 float weight_coeff_a, float weight_coeff_b,
+                                 int length);
+
+}ACELPVContext;
+
+/**
+ * Initialize ACELPVContext.
+ */
+void ff_acelp_vectors_init(ACELPVContext *c);
+void ff_acelp_vectors_init_mips(ACELPVContext *c);
+
 /** Sparse representation for the algebraic codebook (fixed) vector */
-typedef struct {
+typedef struct AMRFixed {
     int      n;
     int      x[10];
     float    y[10];
@@ -134,7 +158,7 @@ extern const float ff_pow_0_55[10];
 
 /**
  * Decode fixed-codebook vector (3.8 and D.5.8 of G.729, 5.7.1 of AMR).
- * @param fc_v [out] decoded fixed codebook vector (2.13)
+ * @param[out] fc_v decoded fixed codebook vector (2.13)
  * @param tab1 table used for first pulse_count pulses
  * @param tab2 table used for last pulse
  * @param pulse_indexes fixed codebook indexes
@@ -174,7 +198,7 @@ void ff_decode_10_pulses_35bits(const int16_t *fixed_index,
 
 /**
  * weighted sum of two vectors with rounding.
- * @param out [out] result of addition
+ * @param[out] out result of addition
  * @param in_a first vector
  * @param in_b second vector
  * @param weight_coeff_a first vector weight coefficient
@@ -198,7 +222,7 @@ void ff_acelp_weighted_vector_sum(int16_t* out,
 
 /**
  * float implementation of weighted sum of two vectors.
- * @param out [out] result of addition
+ * @param[out] out result of addition
  * @param in_a first vector
  * @param in_b second vector
  * @param weight_coeff_a first vector weight coefficient
