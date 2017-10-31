@@ -16,7 +16,7 @@
  *   Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 #include "libavutil/avstring.h"
-#include "avformat.h"
+#include "libavformat/avformat.h"
 #include <fcntl.h>
 #if HAVE_SETMODE || defined(__MINGW32__)
 #include <io.h>
@@ -25,8 +25,6 @@
 #include <sys/time.h>
 #include <stdlib.h>
 #include "os_support.h"
-
-#include <avformat.h>
 
 static int feeder_open(URLContext *h, const char *filename, int flags)
 {

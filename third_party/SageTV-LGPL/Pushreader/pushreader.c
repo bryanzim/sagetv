@@ -18,9 +18,9 @@
 #include <stdio.h>
 #include <math.h>
 #define HAVE_AV_CONFIG_H
-#include <avcodec.h>
-#include <avformat.h>
-#include <audioconvert.h>
+#include "libavcodec/avcodec.h"
+#include "libavcodec/audioconvert.h"
+#include "libavformat/avformat.h"
 //#include <allformats.h>
 #include "PushReader.h"
 //#include "allformats.h"

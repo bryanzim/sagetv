@@ -33,7 +33,7 @@ config*.log
 /native/**/*.suo
 /native/**/*.tlog
 /native/**/*.URL
-/native/**/*.vcxproj*
+/native/**/*.vcxproj.user
 /native/**/*.VC.db
 /native/**/*.VC.opendb
 /native/**/*.VC.db-shm
@@ -42,6 +42,7 @@ config*.log
 
 /third_party/**/*.exp
 /third_party/**/*.idb
+/third_party/**/*.ipch
 /third_party/**/*.lib
 /third_party/**/*.lo
 /third_party/**/*.log
@@ -53,8 +54,12 @@ config*.log
 /third_party/**/*.pdb
 /third_party/**/*.res
 /third_party/**/*.sbr
+/third_party/**/*.sqlite
+/third_party/**/*.suo
 /third_party/**/*.tlog
-/third_party/**/*.vcxproj*
+/third_party/**/*.vcxproj.user
+/third_party/**/*.VC.db
+/third_party/**/*.VC.opendb
 /third_party/ffmpeg/ffbuild/**
 
 # gradle/eclipse stuff
