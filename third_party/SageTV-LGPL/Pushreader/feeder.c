@@ -17,15 +17,18 @@
  */
 #include "libavutil/avstring.h"
 #include "libavformat/avformat.h"
+#include "libavformat/avio.h"
+#include "libavformat/url.h"
 #include <fcntl.h>
 #if HAVE_SETMODE || defined(__MINGW32__)
 #include <io.h>
 #endif
-#include <unistd.h>
-#include <sys/time.h>
-#include <stdlib.h>
-#include "os_support.h"
+//#include <unistd.h>
+//#include <sys/time.h>
+//#include <stdlib.h>
+//#include "os_support.h"
 
+#define URL_ACTIVEFILE 1024
 
 static int feeder_open(URLContext *h, const char *filename, int flags)
 {
@@ -40,9 +43,9 @@ static int feeder_open(URLContext *h, const char *filename, int flags)
     
 	av_log(NULL, AV_LOG_ERROR,  "Feeder is called on file:%s\r\n", filename );     
     
-    if (flags & URL_RDWR) {
+    if (flags & AVIO_FLAG_READ_WRITE) {
         access = O_CREAT | O_TRUNC | O_RDWR;
-    } else if (flags & URL_WRONLY) {
+    } else if (flags & AVIO_FLAG_WRITE) {
         access = O_CREAT | O_TRUNC | O_WRONLY;
     } else {
         access = O_RDONLY;

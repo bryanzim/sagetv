@@ -19,6 +19,7 @@
 #ifndef __PUSHREADER_H__
 #define __PUSHREADER_H__
 
+#include "libavformat/url.h"
 
 #ifdef __cplusplus
 extern "C" {

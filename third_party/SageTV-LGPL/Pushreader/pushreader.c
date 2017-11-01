@@ -19,7 +19,7 @@
 #include <math.h>
 #define HAVE_AV_CONFIG_H
 #include "libavcodec/avcodec.h"
-#include "libavcodec/audioconvert.h"
+#include "libswresample/audioconvert.h"
 #include "libavformat/avformat.h"
 //#include <allformats.h>
 #include "PushReader.h"
@@ -27,7 +27,12 @@
 #include "flashmpeg4.h"
 #include "feeder.h"
 
-void *av_memcpy(void *dest, const void *src, unsigned int size);
+#define URL_ACTIVEFILE 1024
+
+void *av_memcpy(void *dest, const void *src, unsigned int size)
+{
+        return memcpy(dest, src, size);
+}
 
 //#define DEBUGAAC
 //#define DEBUGH264
@@ -74,7 +79,7 @@ struct PushReader
     int vc1seqsize;
     int vc1entoffset;
     int vc1entsize;
-    AVAudioConvert *convert_ctx;
+    AudioConvert *convert_ctx;
     int bufferlen2;
     int bufferpos2;
 };
@@ -191,15 +196,15 @@ struct PushReader *OpenPushReader( const char *filename, URLProtocol *private_pr
         AVCodecContext *enc = t1->context->streams[i]->codec;
         switch(enc->codec_type)
         {
-            case CODEC_TYPE_AUDIO:
+            case AVMEDIA_TYPE_AUDIO:
                 if (audiostream < 0)
                     audiostream = i;
                 break;
-            case CODEC_TYPE_VIDEO:
+            case AVMEDIA_TYPE_VIDEO:
                 if (videostream < 0)
                     videostream = i;
                 break;
-            case CODEC_TYPE_SUBTITLE:
+            case AVMEDIA_TYPE_SUBTITLE:
             	if (spustream < 0)
             		spustream = i;
 
@@ -246,13 +251,13 @@ int getVideoCodecSettings(struct PushReader *t1, int *width, int *height, int *m
     t1->flashconversion=0;
     switch(codecid)
     {
-        case CODEC_ID_MPEG1VIDEO:
+        case AV_CODEC_ID_MPEG1VIDEO:
             return 2;
-        case CODEC_ID_MPEG2VIDEO:
+        case AV_CODEC_ID_MPEG2VIDEO:
             return 2;
-        case CODEC_ID_MSMPEG4V3:
+        case AV_CODEC_ID_MSMPEG4V3:
             return 3;
-        case CODEC_ID_MPEG4:
+        case AV_CODEC_ID_MPEG4:
             fprintf(stderr, "Format is %s\n",t1->context->iformat->name);
             if(!strcmp(t1->context->iformat->name, "avi"))
             {
@@ -265,18 +270,18 @@ int getVideoCodecSettings(struct PushReader *t1, int *width, int *height, int *m
                     (t1->context->streams[t1->videostream]->codec->time_base.den/g)&0xFFFF;
             }
             return 4;
-        case CODEC_ID_FLV1:
+        case AV_CODEC_ID_FLV1:
             //t1->flashconversion=1;                      //ZQ ffdshow don't need convert
             //if(*width>720 || *height>576) return -1;
             //if(!initFlashConversion(t1)) return -1;
             return 5;
-		case CODEC_ID_WMV1:
+		case AV_CODEC_ID_WMV1:
 			return 6;
-		case CODEC_ID_WMV2:
+		case AV_CODEC_ID_WMV2:
 			return 7;
-        case CODEC_ID_VC1:
+        case AV_CODEC_ID_VC1:
             return 8;
-        case CODEC_ID_WMV3:
+        case AV_CODEC_ID_WMV3:
             if(t1->context->streams[t1->videostream]->codec->extradata && 
                 t1->context->streams[t1->videostream]->codec->extradata_size>=4)
             {
@@ -295,7 +300,7 @@ int getVideoCodecSettings(struct PushReader *t1, int *width, int *height, int *m
                 fprintf(stderr, "WMV9 without extradata?\n");
             }
             return 9;
-        case CODEC_ID_H264:
+        case AV_CODEC_ID_H264:
             if((!strcmp(t1->context->iformat->name, "mov,mp4,m4a,3gp,3g2,mj2")) ||
                 (!strcmp(t1->context->iformat->name, "matroska"))||
                 (!strcmp(t1->context->iformat->name, "flv")))
@@ -308,11 +313,11 @@ int getVideoCodecSettings(struct PushReader *t1, int *width, int *height, int *m
                 av_log(NULL, AV_LOG_ERROR,  "H264 inside mp4\n");
             }
             return 10;
-        case CODEC_ID_MJPEG:
+        case AV_CODEC_ID_MJPEG:
             return 11;
-        case CODEC_ID_VP6F:
+        case AV_CODEC_ID_VP6F:
         	return 12;
-        case CODEC_ID_RV40:
+        case AV_CODEC_ID_RV40:
         	return 13;
         default:
             av_log(NULL, AV_LOG_ERROR,  "Unsupported video codec %d\n", codecid);
@@ -333,10 +338,12 @@ int getMpegVideoStreamInf( struct PushReader *t1, int *frame_rate_num, int *fram
     	*frame_rate_num = t1->context->streams[t1->videostream]->r_frame_rate.num;
     if ( frame_rate_den )
     	*frame_rate_den = t1->context->streams[t1->videostream]->r_frame_rate.den;
-    *language = t1->context->streams[t1->videostream]->language[3];
-    *language = (*language<<8)|t1->context->streams[t1->videostream]->language[2];
-    *language = (*language<<8)|t1->context->streams[t1->videostream]->language[1];
-    *language = (*language<<8)|t1->context->streams[t1->videostream]->language[0];
+
+    AVDictionaryEntry* lang = av_dict_get(t1->context->streams[t1->videostream]->metadata, "language", NULL, 0);
+    *language = lang->value[3];
+    *language = (*language << 8) | lang->value[2];
+    *language = (*language << 8) | lang->value[2];
+    *language = (*language << 8) | lang->value[0];
     
     return 1;
 }
@@ -348,10 +355,11 @@ int getAudioStreamInf( struct PushReader *t1, unsigned long *language  )
     {
         return 0;
     }	 
-    *language = t1->context->streams[t1->audiostream]->language[3];
-    *language = (*language<<8)|t1->context->streams[t1->audiostream]->language[2];
-    *language = (*language<<8)|t1->context->streams[t1->audiostream]->language[1];
-    *language = (*language<<8)|t1->context->streams[t1->audiostream]->language[0];
+    AVDictionaryEntry* lang = av_dict_get(t1->context->streams[t1->audiostream]->metadata, "language", NULL, 0);
+    *language = lang->value[3];
+    *language = (*language << 8) | lang->value[2];
+    *language = (*language << 8) | lang->value[2];
+    *language = (*language << 8) | lang->value[0];
 
     return 1;
 }
@@ -363,10 +371,11 @@ int getSpuStreamInf( struct PushReader *t1, unsigned long *language  )
     {
         return 0;
     }  
-    *language = t1->context->streams[t1->spustream]->language[3];
-    *language = (*language<<8)|t1->context->streams[t1->spustream]->language[2];
-    *language = (*language<<8)|t1->context->streams[t1->spustream]->language[1];
-    *language = (*language<<8)|t1->context->streams[t1->spustream]->language[0];
+    AVDictionaryEntry* lang = av_dict_get(t1->context->streams[t1->spustream]->metadata, "language", NULL, 0);
+    *language = lang->value[3];
+    *language = (*language<<8) | lang->value[2];
+    *language = (*language<<8) | lang->value[2];
+    *language = (*language<<8) | lang->value[0];
 
     return 1;
 }
@@ -444,10 +453,10 @@ int getAudioCodecSettings(struct PushReader *t1, int *channels, int *bps, int *s
 
     switch(codecid)
     {
-        case CODEC_ID_MP2:
-        case CODEC_ID_MP3:
+        case AV_CODEC_ID_MP2:
+        case AV_CODEC_ID_MP3:
             return 1;
-        case CODEC_ID_AAC:
+        case AV_CODEC_ID_AAC:
             if(!strcmp(t1->context->iformat->name, "mov,mp4,m4a,3gp,3g2,mj2") ||
              !strcmp(t1->context->iformat->name, "matroska")||
              !strcmp(t1->context->iformat->name, "flv"))
@@ -455,15 +464,15 @@ int getAudioCodecSettings(struct PushReader *t1, int *channels, int *bps, int *s
                 t1->fixAAC=1;
             }
             return 2;
-        case CODEC_ID_AC3:
+        case AV_CODEC_ID_AC3:
             return 3;
-        case CODEC_ID_DTS:
+        case AV_CODEC_ID_DTS:
             return 4;
         // WMAV1 is not supported by the hardware playback?
         //case CODEC_ID_WMAV1:
         //    return -1;
-        case CODEC_ID_WMALOSSLESS:
-        case CODEC_ID_WMAPRO:
+        case AV_CODEC_ID_WMALOSSLESS:
+        case AV_CODEC_ID_WMAPRO:
             if(t1->context->streams[t1->audiostream]->codec->extradata && 
                 t1->context->streams[t1->audiostream]->codec->extradata_size>=16)
             {
@@ -494,7 +503,7 @@ int getAudioCodecSettings(struct PushReader *t1, int *channels, int *bps, int *s
                 fprintf(stderr, "misc set to %X\n",*misc);
             }
             return 7;
-        case CODEC_ID_WMAV2:
+        case AV_CODEC_ID_WMAV2:
             //t1->audiostream=-1;
             if(t1->context->streams[t1->audiostream]->codec->extradata && 
                 t1->context->streams[t1->audiostream]->codec->extradata_size>=6)
@@ -515,24 +524,24 @@ int getAudioCodecSettings(struct PushReader *t1, int *channels, int *bps, int *s
                 fprintf(stderr, "misc set to %X\n",*misc);
             }
             return 5;
-        case CODEC_ID_PCM_S16BE ... CODEC_ID_PCM_S16LE_PLANAR:
-        case CODEC_ID_PCM_S16LE:
-        case CODEC_ID_ADPCM_IMA_QT ... CODEC_ID_ADPCM_EA_XAS:
+        case AV_CODEC_ID_PCM_S16BE ... AV_CODEC_ID_PCM_S16LE_PLANAR:
+        case AV_CODEC_ID_PCM_S16LE:
+        case AV_CODEC_ID_ADPCM_IMA_QT ... AV_CODEC_ID_ADPCM_EA_XAS:
 			t1->decodeAudio = 1;
 			return 6;
-        case CODEC_ID_VORBIS:
+        case AV_CODEC_ID_VORBIS:
 			if ( t1->disableDecodeAudio ) return 11;
-        case CODEC_ID_ALAC:
+        case AV_CODEC_ID_ALAC:
 			if ( t1->disableDecodeAudio ) return 12;
-        case CODEC_ID_FLAC:
+        case AV_CODEC_ID_FLAC:
 			if ( t1->disableDecodeAudio ) return 13;
             t1->decodeAudio = 1;
             return 6;
-        case CODEC_ID_EAC3:
+        case AV_CODEC_ID_EAC3:
         	return 8;
-        case CODEC_ID_TRUEHD:
+        case AV_CODEC_ID_TRUEHD:
         	return 9;
-        case CODEC_ID_COOK:
+        case AV_CODEC_ID_COOK:
 			if ( t1->enableDecodeAudioType&COOK_AUDIO_MASK )
 			{
 				t1->decodeAudio = 1; //ZQ too diffcult to get cook codec that isn't inclued in ffdshow
@@ -739,7 +748,7 @@ int ProcessFrames(struct PushReader *t1, int *type, unsigned char *buffer, int b
                     }
                 }
                 else if(t1->videostream!=-1 && 
-                    t1->context->streams[t1->videostream]->codec->codec_id == CODEC_ID_MPEG4 && 
+                    t1->context->streams[t1->videostream]->codec->codec_id == AV_CODEC_ID_MPEG4 && 
                     t1->context->streams[t1->videostream]->codec->extradata_size)
                 {
                     int hlen=t1->context->streams[t1->videostream]->codec->extradata_size;
@@ -752,7 +761,7 @@ int ProcessFrames(struct PushReader *t1, int *type, unsigned char *buffer, int b
                     t1->sentVideoHeader=1;
                 }
                 else if(t1->videostream!=-1 && 
-                    t1->context->streams[t1->videostream]->codec->codec_id == CODEC_ID_VC1 && 
+                    t1->context->streams[t1->videostream]->codec->codec_id == AV_CODEC_ID_VC1 && 
                     t1->context->streams[t1->videostream]->codec->extradata_size)
                 {
                     int i;
@@ -811,7 +820,7 @@ int ProcessFrames(struct PushReader *t1, int *type, unsigned char *buffer, int b
                         t1->packet.convergence_duration*90000LL;
 
                 if(0 && t1->packetType==0 && t1->videostream!=-1 &&
-                    t1->context->streams[t1->videostream]->codec->codec_id == CODEC_ID_VC1 && 
+                    t1->context->streams[t1->videostream]->codec->codec_id == AV_CODEC_ID_VC1 && 
                     t1->context->streams[t1->videostream]->codec->extradata_size)
                 {
                     int i;
@@ -885,10 +894,10 @@ int ProcessFrames(struct PushReader *t1, int *type, unsigned char *buffer, int b
                         fprintf(stderr, "Error allocating audio buffer\n");
                         return 0;
                     }
-                    if (ctx->sample_fmt != SAMPLE_FMT_S16) {
+                    if (ctx->sample_fmt != AV_SAMPLE_FMT_S16) {
                         if (t1->convert_ctx)
                             av_audio_convert_free(t1->convert_ctx);
-                        t1->convert_ctx = av_audio_convert_alloc(SAMPLE_FMT_S16, 1,
+                        t1->convert_ctx = av_audio_convert_alloc(AV_SAMPLE_FMT_S16, 1,
                                                                 ctx->sample_fmt, 1, NULL, 0);
                         if (!t1->convert_ctx) {
                             fprintf(stderr, "Couldn't allocate audio converter  from %s\n",
@@ -1262,7 +1271,7 @@ int ProcessVideoFrames(struct PushReader *t1, unsigned char *buffer, int bufferl
 				}
 			}
 			else if(t1->videostream!=-1 && 
-				t1->context->streams[t1->videostream]->codec->codec_id == CODEC_ID_MPEG4 && 
+				t1->context->streams[t1->videostream]->codec->codec_id == AV_CODEC_ID_MPEG4 && 
 				t1->context->streams[t1->videostream]->codec->extradata_size)
 			{
 				int hlen=t1->context->streams[t1->videostream]->codec->extradata_size;
@@ -1274,7 +1283,7 @@ int ProcessVideoFrames(struct PushReader *t1, unsigned char *buffer, int bufferl
 				bytesread+=hlen;
 				t1->sentVideoHeader=1;
 			}
-			else if( t1->context->streams[t1->videostream]->codec->codec_id == CODEC_ID_VC1 && 
+			else if( t1->context->streams[t1->videostream]->codec->codec_id == AV_CODEC_ID_VC1 && 
 					 t1->context->streams[t1->videostream]->codec->extradata_size)
 			{
 				int i;
@@ -1319,7 +1328,7 @@ int ProcessVideoFrames(struct PushReader *t1, unsigned char *buffer, int bufferl
                     t1->packet.convergence_duration*90000LL;
 
             if( 0 && t1->videostream!=-1 &&
-                t1->context->streams[t1->videostream]->codec->codec_id == CODEC_ID_VC1 && 
+                t1->context->streams[t1->videostream]->codec->codec_id == AV_CODEC_ID_VC1 && 
                 t1->context->streams[t1->videostream]->codec->extradata_size)
             {
                 int i;
@@ -1509,10 +1518,10 @@ int ProcessAudioFrames(struct PushReader *t1, unsigned char *buffer, int bufferl
                     fprintf(stderr, "Error allocating audio buffer\n");
                     return 0;
                 }
-                if (ctx->sample_fmt != SAMPLE_FMT_S16) {
+                if (ctx->sample_fmt != AV_SAMPLE_FMT_S16) {
                     if (t1->convert_ctx)
                         av_audio_convert_free(t1->convert_ctx);
-                    t1->convert_ctx = av_audio_convert_alloc(SAMPLE_FMT_S16, 1,
+                    t1->convert_ctx = av_audio_convert_alloc(AV_SAMPLE_FMT_S16, 1,
                                                             ctx->sample_fmt, 1, NULL, 0);
                     if (!t1->convert_ctx) {
                         fprintf(stderr, "Couldn't allocate audio converter  from %s\n",
@@ -1855,13 +1864,13 @@ int prGetStreamCounts(struct PushReader *t1, int *videostreams, int *audiostream
         AVCodecContext *enc = t1->context->streams[i]->codec;
         switch(enc->codec_type)
         {
-            case CODEC_TYPE_AUDIO:
+            case AVMEDIA_TYPE_AUDIO:
                 *audiostreams+=1;
                 break;
-            case CODEC_TYPE_VIDEO:
+            case AVMEDIA_TYPE_VIDEO:
                 *videostreams+=1;
                 break;
-            case CODEC_TYPE_SUBTITLE:
+            case AVMEDIA_TYPE_SUBTITLE:
                 *spustreams+=1;
                 break;
             default:
@@ -1884,12 +1893,12 @@ int prSelectAudioStream(struct PushReader *t1, int stream)
         AVCodecContext *enc = t1->context->streams[i]->codec;
         switch(enc->codec_type)
         {
-            case CODEC_TYPE_AUDIO:
+            case AVMEDIA_TYPE_AUDIO:
                 if(audiostreams==stream)
                     t1->audiostream=i;
                 audiostreams+=1;
                 break;
-            case CODEC_TYPE_VIDEO:
+            case AVMEDIA_TYPE_VIDEO:
                 videostreams+=1;
                 break;
             default:
@@ -1899,19 +1908,19 @@ int prSelectAudioStream(struct PushReader *t1, int stream)
 	if ( t1->audiostream >= 0 )
 	{
 		int codecid=t1->context->streams[t1->audiostream]->codec->codec_id;
-		if ( ( CODEC_ID_ADPCM_IMA_QT <= codecid && codecid <= CODEC_ID_ADPCM_EA_XAS ) )
+		if ( ( AV_CODEC_ID_ADPCM_IMA_QT <= codecid && codecid <= AV_CODEC_ID_ADPCM_EA_XAS ) )
 		{
 			t1->decodeAudio = 1;
 		}
 		else
-		if ( ( codecid == CODEC_ID_VORBIS || codecid == CODEC_ID_ALAC || codecid == CODEC_ID_FLAC ) )
+		if ( ( codecid == AV_CODEC_ID_VORBIS || codecid == AV_CODEC_ID_ALAC || codecid == AV_CODEC_ID_FLAC ) )
 		{
 			if ( !t1->disableDecodeAudio )
 				t1->decodeAudio = 1;
 			else
 				t1->decodeAudio = 0;
 		} else
-		if ( codecid == CODEC_ID_COOK && ( t1->enableDecodeAudioType&COOK_AUDIO_MASK ) ) 
+		if ( codecid == AV_CODEC_ID_COOK && ( t1->enableDecodeAudioType&COOK_AUDIO_MASK ) )
 		{
 			t1->decodeAudio = 1;
 		}
@@ -1934,15 +1943,15 @@ int prSetVideoStream(struct PushReader *t1, int stream)
         AVCodecContext *enc = t1->context->streams[i]->codec;
         switch(enc->codec_type)
         {
-            case CODEC_TYPE_AUDIO:
+            case AVMEDIA_TYPE_AUDIO:
                 audiostreams+=1;
                 break;
-            case CODEC_TYPE_VIDEO:
+            case AVMEDIA_TYPE_VIDEO:
                 if(videostreams==stream)
                     t1->videostream=i;
                 videostreams+=1;
                 break;
-            case CODEC_TYPE_SUBTITLE:
+            case AVMEDIA_TYPE_SUBTITLE:
                 spustreams+=1;
                 break;
             default:
@@ -1977,12 +1986,12 @@ int prSetAudioStream(struct PushReader *t1, int stream)
         AVCodecContext *enc = t1->context->streams[i]->codec;
         switch(enc->codec_type)
         {
-            case CODEC_TYPE_AUDIO:
+            case AVMEDIA_TYPE_AUDIO:
                 if(audiostreams==stream)
                     t1->audiostream=i;
                 audiostreams+=1;
                 break;
-            case CODEC_TYPE_VIDEO:
+            case AVMEDIA_TYPE_VIDEO:
                 videostreams+=1;
                 break;
             default:
@@ -1993,12 +2002,12 @@ int prSetAudioStream(struct PushReader *t1, int stream)
 	if ( t1->audiostream >= 0 )
 	{
 		int codecid=t1->context->streams[t1->audiostream]->codec->codec_id;
-		if ( CODEC_ID_ADPCM_IMA_QT <= codecid && codecid <= CODEC_ID_ADPCM_EA_XAS )
+		if ( AV_CODEC_ID_ADPCM_IMA_QT <= codecid && codecid <= AV_CODEC_ID_ADPCM_EA_XAS )
 		{
 			t1->decodeAudio = 1;
 		}
 		else
-		if ( ( codecid == CODEC_ID_VORBIS || codecid == CODEC_ID_ALAC || codecid == CODEC_ID_FLAC ) )
+		if ( ( codecid == AV_CODEC_ID_VORBIS || codecid == AV_CODEC_ID_ALAC || codecid == AV_CODEC_ID_FLAC ) )
 		{
 			if ( !t1->disableDecodeAudio )
 				t1->decodeAudio = 1;
@@ -2006,7 +2015,7 @@ int prSetAudioStream(struct PushReader *t1, int stream)
 				t1->decodeAudio = 0;
 		}
 		else
-		if ( codecid == CODEC_ID_COOK && ( t1->enableDecodeAudioType&COOK_AUDIO_MASK ) ) 
+		if ( codecid == AV_CODEC_ID_COOK && ( t1->enableDecodeAudioType&COOK_AUDIO_MASK ) )
 		{
 			t1->decodeAudio = 1;
 		}
@@ -2029,13 +2038,13 @@ int prSetSpuStream(struct PushReader *t1, int stream)
         AVCodecContext *enc = t1->context->streams[i]->codec;
         switch(enc->codec_type)
         {
-            case CODEC_TYPE_AUDIO:
+            case AVMEDIA_TYPE_AUDIO:
                 audiostreams+=1;
                 break;
-            case CODEC_TYPE_VIDEO:
+            case AVMEDIA_TYPE_VIDEO:
                 videostreams+=1;
                 break;
-            case CODEC_TYPE_SUBTITLE:
+            case AVMEDIA_TYPE_SUBTITLE:
                 if(spustreams==stream)
                     t1->spustream=i;
                 spustreams+=1;
